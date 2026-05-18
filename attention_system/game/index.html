@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>梦核跑酷 - 稳定渲染版</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5); z-index: 100; pointer-events: none;
+        }
+        .bar-bg { width: 220px; height: 8px; background: rgba(255,255,255,0.2); margin-top: 10px; border-radius: 4px; overflow: hidden; }
+        #focus-bar { width: 30%; height: 100%; background: linear-gradient(90deg, #00f2ff, #00ff88); transition: width 0.3s; }
+        .controls { position: absolute; bottom: 20px; width: 100%; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; }
+        /* 隐蔽的算法数据显示 */
+        #algorithm-data {
+            position: absolute; top: 20px; right: 20px; 
+            color: rgba(255, 255, 255, 0.3); font-size: 10px;
+            text-align: right; z-index: 100; pointer-events: none;
+            font-family: monospace;
+        }
+        #algorithm-data div {
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div style="font-size: 14px; letter-spacing: 2px;">DREAMCORE RUNNER</div>
+        <div style="font-size: 28px; margin-top: 5px;">Score: <span id="score-val">0</span></div>
+        <div style="margin-top: 15px; font-size: 14px;">Focus Level: <span id="focus-val">30</span>%</div>
+        <div class="bar-bg"><div id="focus-bar"></div></div>
+    </div>
+    <!-- 隐蔽的算法数据显示 -->
+    <div id="algorithm-data">
+        <div>GyroX: <span id="gyro-x">0.00</span></div>
+        <div>GyroY: <span id="gyro-y">0.00</span></div>
+        <div>GyroZ: <span id="gyro-z">0.00</span></div>
+        <div>Attn: <span id="attn-val">0.00</span></div>
+        <div>CursorX: <span id="cursor-x">0</span></div>
+        <div>CursorY: <span id="cursor-y">0</span></div>
+    </div>
+    <div class="controls">陀螺仪控制 - 左右移动/跳跃 | Space - 暂停/继续</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/VignetteShader.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+
+    <script>
+        // 核心变量
+        let scene, camera, renderer, composer, player;
+        let score = 0, focusValue = 30; 
+        let currentLane = 0; 
+        let obstacles = [];
+        let gameOver = false;
+        
+        // 算法数据变量
+        let gyroscope_x = 0;
+        let gyroscope_y = 0;
+        let gyroscope_z = 0;
+        let attention_value = 0;
+        let focus_area_width = 0;
+        let focus_area_height = 0;
+        let focus_area_x = 0;
+        let focus_area_y = 0;
+        let focus_x = 0;
+        let focus_y = 0;
+        
+        // 上一帧的陀螺仪数据，用于计算变化量
+        let last_gyroscope_x = 0;
+        let last_gyroscope_y = 0;
+        
+        // 上一帧的光标数据，用于计算相对位移
+        let last_cursor_x = 0;
+        let last_cursor_y = 0;
+        
+        // 游戏状态
+        let isPaused = false;
+        
+        // WebSocket连接
+        let ws = null;
+        const WS_URL = 'ws://localhost:8765';
+
+        function init() {
+            // 场景初始化 [cite: 19]
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd8b5ff);
+            scene.fog = new THREE.Fog(0xd8b5ff, 10, 60);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // 角色与环境 [cite: 36, 38]
+            player = new THREE.Mesh(
+                new THREE.CapsuleGeometry(0.4, 0.8, 4, 16),
+                new THREE.MeshLambertMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.5 })
+            );
+            player.position.y = 1;
+            scene.add(player);
+
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 2000), new THREE.MeshLambertMaterial({ color: 0xffd1dc }));
+            ground.rotation.x = -Math.PI / 2;
+            scene.add(ground);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+            // 后期处理初始化 (关键修复点：使用全局 THREE 访问) [cite: 13, 39]
+            composer = new THREE.EffectComposer(renderer);
+            composer.addPass(new THREE.RenderPass(scene, camera));
+
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+            composer.addPass(bloomPass);
+
+            const vignettePass = new THREE.ShaderPass(THREE.VignetteShader);
+            vignettePass.uniforms["offset"].value = 1.0;
+            vignettePass.uniforms["darkness"].value = 1.2;
+            composer.addPass(vignettePass);
+
+            setInterval(spawnObstacle, 1500);
+            
+            // 初始化WebSocket连接
+            initWebSocket();
+            
+            animate();
+        }
+        
+        function initWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+                
+                ws.onopen = function() {
+                    console.log('[WebSocket] 已连接到服务器');
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        updateAlgorithmData(
+                            data.gyroscope_x, 
+                            data.gyroscope_y, 
+                            data.gyroscope_z,
+                            data.attention, 
+                            data.focus_area_width, 
+                            data.focus_area_height,
+                            data.focus_area_x,
+                            data.focus_area_y,
+                            data.focus_x,
+                            data.focus_y
+                        );
+                    } catch (e) {
+                        console.error('[WebSocket] 数据解析错误:', e);
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('[WebSocket] 错误:', error);
+                };
+                
+                ws.onclose = function() {
+                    console.log('[WebSocket] 连接已关闭，5秒后重连...');
+                    setTimeout(initWebSocket, 5000);
+                };
+            } catch (e) {
+                console.error('[WebSocket] 连接失败:', e);
+            }
+        }
+
+        function spawnObstacle() {
+            if (gameOver) return;
+            const lane = Math.floor(Math.random() * 3) - 1;
+            const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
+            obs.position.set(lane * 3, 0.6, player.position.z - 60);
+            scene.add(obs);
+            obstacles.push(obs);
+        }
+
+        function animate() {
+            if (gameOver) return;
+            requestAnimationFrame(animate);
+            
+            // 如果游戏暂停，跳过更新逻辑
+            if (isPaused) {
+                composer.render();
+                return;
+            }
+
+            // 专注度与速度耦合 [cite: 10, 16, 33]
+            const currentSpeed = 0.15 + 0.00005 * Math.pow(focusValue, 2);
+            player.position.z -= currentSpeed;
+            
+            // 使用陀螺仪数据控制角色移动
+            updatePlayerPositionFromGyro();
+            
+            player.position.x += (currentLane * 3 - player.position.x) * 0.1;
+
+            // 碰撞检测
+            obstacles.forEach((obs, index) => {
+                if (Math.abs(obs.position.z - player.position.z) < 0.8 && Math.abs(obs.position.x - player.position.x) < 0.8 && player.position.y < 1.5) {
+                    gameOver = true;
+                    alert("梦境破碎！");
+                    location.reload();
+                }
+            });
+
+            // 相机动态 [cite: 11]
+            camera.position.lerp(new THREE.Vector3(player.position.x * 0.5, 5, player.position.z + 10), 0.05);
+            camera.lookAt(player.position.x, 0, player.position.z - 5);
+
+            // 更新 UI [cite: 38]
+            score++;
+            document.getElementById('score-val').innerText = Math.floor(score/10);
+            document.getElementById('focus-val').innerText = focusValue;
+            document.getElementById('focus-bar').style.width = focusValue + '%';
+            
+            // 更新隐蔽的算法数据显示
+            document.getElementById('gyro-x').innerText = gyroscope_x.toFixed(2);
+            document.getElementById('gyro-y').innerText = gyroscope_y.toFixed(2);
+            document.getElementById('gyro-z').innerText = gyroscope_z.toFixed(2);
+            document.getElementById('attn-val').innerText = attention_value.toFixed(2);
+            document.getElementById('cursor-x').innerText = focus_x.toFixed(0);
+            document.getElementById('cursor-y').innerText = focus_y.toFixed(0);
+
+            composer.render();
+        }
+
+        // 根据光标数据更新角色位置
+        function updatePlayerPositionFromGyro() {
+            // 计算光标数据的相对位移
+            const deltaX = focus_x - last_cursor_x;
+            const deltaY = focus_y - last_cursor_y;
+            
+            // 设置阈值，只有当位移超过一定值时才认为是有意义的移动
+            const moveThreshold = 50;  // 左右移动阈值（像素）
+            const jumpThreshold = 80;  // 跳跃阈值（像素）
+            
+            // 水平方向移动（左右）- 基于 CursorX 相对位移
+            if (Math.abs(deltaX) > moveThreshold) {
+                if (deltaX > 0 && currentLane < 1) {
+                    // 向右移动
+                    currentLane++;
+                } else if (deltaX < 0 && currentLane > -1) {
+                    // 向左移动
+                    currentLane--;
+                }
+            }
+            
+            // 垂直方向移动（跳跃）- 基于 CursorY 相对位移
+            if (deltaY < -jumpThreshold) {
+                // 向上快速移动（跳跃）
+                if (player.position.y <= 1.1) {
+                    gsap.to(player.position, { y: 3, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
+                }
+            }
+            
+            // 更新上一帧的数据
+            last_cursor_x = focus_x;
+            last_cursor_y = focus_y;
+        }
+
+        // 控制逻辑 - 只保留空格键暂停功能
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                togglePause();
+            }
+        });
+        
+        // 暂停/继续游戏
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                console.log('游戏已暂停');
+            } else {
+                console.log('游戏已继续');
+            }
+        }
+
+        // 更新算法数据的函数
+        function updateAlgorithmData(gyroX, gyroY, gyroZ, attention, focusWidth, focusHeight, focusAreaX, focusAreaY, focusX, focusY) {
+            gyroscope_x = gyroX || 0;
+            gyroscope_y = gyroY || 0;
+            gyroscope_z = gyroZ || 0;
+            attention_value = attention || 0;
+            focus_area_width = focusWidth || 0;
+            focus_area_height = focusHeight || 0;
+            focus_area_x = focusAreaX || 0;
+            focus_area_y = focusAreaY || 0;
+            focus_x = focusX || 0;
+            focus_y = focusY || 0;
+        }
+
+        init();
+    </script>
+</body>
+</html>

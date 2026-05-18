@@ -1,0 +1,24 @@
+{
+  'algorithm_name': 'gyroscope',
+  'msg': 'ipc_algorithm_test',
+  'result_args': {
+    'data': {
+      'focus_area_height': 1046,
+      'focus_area_width': 1686,
+      'focus_area_x': 0,
+      'focus_area_y': 0,
+      'focus_x': 0,
+      'focus_y': 1046,
+      'gyroscope_x': 16.93,
+      'gyroscope_y': 134.03,
+      'gyroscope_z': 235.69
+    }
+  }
+}
+{
+  'algorithm_name': 'attention',
+  'msg': 'ipc_algorithm_test',
+  'result_args': {
+    'data': 23
+  }
+}
