@@ -7,11 +7,22 @@
         * { margin: 0; padding: 0; }
         body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui {
-            position: absolute; top: 20px; left: 20px; color: white;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5); z-index: 100; pointer-events: none;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); 
+            z-index: 100; pointer-events: none; text-align: center;
         }
-        .bar-bg { width: 220px; height: 8px; background: rgba(255,255,255,0.2); margin-top: 10px; border-radius: 4px; overflow: hidden; }
-        #focus-bar { width: 30%; height: 100%; background: linear-gradient(90deg, #00f2ff, #00ff88); transition: width 0.3s; }
+        .energy-bar-container {
+            width: 300px; height: 20px; background: rgba(255,255,255,0.15);
+            margin-top: 15px; border-radius: 10px; overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: 0 0 15px rgba(0,242,255,0.3);
+        }
+        #focus-bar {
+            width: 30%; height: 100%;
+            background: linear-gradient(90deg, #ff6b6b 0%, #ffd93d 50%, #6bcf7f 100%);
+            transition: width 0.3s ease-out;
+            box-shadow: 0 0 10px rgba(0,255,136,0.6);
+        }
         .controls { position: absolute; bottom: 20px; width: 100%; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; }
         /* 隐蔽的算法数据显示 */
         #algorithm-data {
@@ -27,10 +38,10 @@
 </head>
 <body>
     <div id="ui">
-        <div style="font-size: 14px; letter-spacing: 2px;">DREAMCORE RUNNER</div>
-        <div style="font-size: 28px; margin-top: 5px;">Score: <span id="score-val">0</span></div>
-        <div style="margin-top: 15px; font-size: 14px;">Focus Level: <span id="focus-val">30</span>%</div>
-        <div class="bar-bg"><div id="focus-bar"></div></div>
+        <div style="font-size: 16px; letter-spacing: 3px; font-weight: bold;">DREAMCORE RUNNER</div>
+        <div style="font-size: 32px; margin-top: 8px; font-weight: bold;">Score: <span id="score-val">0</span></div>
+        <div class="energy-bar-container"><div id="focus-bar"></div></div>
+        <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">⚡ Focus Energy: <span id="focus-val">30</span>%</div>
     </div>
     <!-- 隐蔽的算法数据显示 -->
     <div id="algorithm-data">
@@ -111,6 +122,27 @@
             const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 2000), new THREE.MeshLambertMaterial({ color: 0xffd1dc }));
             ground.rotation.x = -Math.PI / 2;
             scene.add(ground);
+
+            // 添加三条轨道显示
+            const lanePositions = [-3, 0, 3]; // 左、中、右三条轨道的X坐标
+            lanePositions.forEach(x => {
+                // 创建轨道线
+                const lineGeometry = new THREE.BufferGeometry();
+                const lineMaterial = new THREE.LineBasicMaterial({ 
+                    color: 0xffffff, 
+                    transparent: true, 
+                    opacity: 0.3 
+                });
+                
+                // 创建从近到远的长线
+                const points = [];
+                points.push(new THREE.Vector3(x, 0.01, player.position.z + 10));
+                points.push(new THREE.Vector3(x, 0.01, player.position.z - 200));
+                lineGeometry.setFromPoints(points);
+                
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                scene.add(line);
+            });
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 
@@ -296,6 +328,9 @@
             focus_area_y = focusAreaY || 0;
             focus_x = focusX || 0;
             focus_y = focusY || 0;
+            
+            // 根据attention值实时更新专注度能量条 (attention范围通常是0-1，转换为0-100)
+            focusValue = Math.min(100, Math.max(0, attention_value * 100));
         }
 
         init();
