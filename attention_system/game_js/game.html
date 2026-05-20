@@ -114,12 +114,119 @@
         }
 
         function updateAlgorithmData(gyroX, gyroY, gyroZ, attention, focusWidth, focusHeight, focusAreaX, focusAreaY, focusX, focusY) {
+            // 更新 DOM 显示
             document.getElementById('gyro-x').innerText = (gyroX || 0).toFixed(2);
             document.getElementById('gyro-y').innerText = (gyroY || 0).toFixed(2);
             document.getElementById('gyro-z').innerText = (gyroZ || 0).toFixed(2);
             document.getElementById('attn-val').innerText = (attention || 0).toFixed(2);
             document.getElementById('cursor-x').innerText = Math.round(focusX || 0);
             document.getElementById('cursor-y').innerText = Math.round(focusY || 0);
+
+            // 暴露原始全局变量
+            window.gyroscope_x = gyroX || 0;
+            window.gyroscope_y = gyroY || 0;
+            window.gyroscope_z = gyroZ || 0;
+            window.attention_value = attention || 0;
+            window.focus_x = focusX || 0;
+            window.focus_y = focusY || 0;
+
+            // 初始化平滑与映射参数（可在控制台调整）
+            if(typeof window.gyroAlpha === 'undefined') window.gyroAlpha = 0.12; // EMA alpha (0-1), 越大更跟随
+            // 默认增益增大以提升灵敏度（可通过 UI 调整）
+            if(typeof window.gyroToAngleGain === 'undefined') window.gyroToAngleGain = 0.06; // 将 gyroscope_x 映射为目标角度的增益（弧度/单位）
+            if(typeof window.gyroLerpSpeed === 'undefined') window.gyroLerpSpeed = 0.12; // 角度插值速度基准
+            if(typeof window.gyroControlEnabled === 'undefined') window.gyroControlEnabled = true;
+
+            // 指数移动平均（EMA）对 gyroscope_x 做低通滤波
+            if(typeof window.smoothedGyroX === 'undefined'){
+                window.smoothedGyroX = window.gyroscope_x;
+            } else {
+                const a = window.gyroAlpha;
+                window.smoothedGyroX = a * (window.gyroscope_x) + (1 - a) * window.smoothedGyroX;
+            }
+
+            // 初始化（如果尚未创建）小型调节 UI
+            if(!document.getElementById('gyro-ui')){
+                const ui = document.createElement('div');
+                ui.id = 'gyro-ui';
+                ui.innerHTML = `
+                    <div class="label">Gyro Ctrl</div>
+                    <div class="row"><label>alpha</label><input id="gyro-alpha" type="range" min="0.01" max="0.6" step="0.01"></div>
+                    <div class="row"><label>gain</label><input id="gyro-gain" type="range" min="0.005" max="0.2" step="0.005"></div>
+                    <div class="row"><label>lerp</label><input id="gyro-lerp" type="range" min="0.01" max="0.6" step="0.01"></div>
+                    <div class="row"><button id="gyro-toggle">ON</button></div>
+                `;
+                // 简单样式
+                ui.style.position = 'absolute';
+                ui.style.left = '8px';
+                ui.style.top = '44px';
+                ui.style.zIndex = 10000;
+                ui.style.background = 'rgba(0,0,0,0.18)';
+                ui.style.color = 'rgba(255,255,255,0.85)';
+                ui.style.fontFamily = 'monospace';
+                ui.style.fontSize = '11px';
+                ui.style.padding = '6px';
+                ui.style.borderRadius = '6px';
+                ui.style.backdropFilter = 'blur(2px)';
+                ui.style.opacity = '0.85';
+                ui.style.pointerEvents = 'auto';
+                ui.style.width = '136px';
+                ui.style.boxSizing = 'border-box';
+                ui.querySelectorAll('.row').forEach; // noop for safety
+                document.body.appendChild(ui);
+
+                // Insert small CSS for elements
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    #gyro-ui .row{display:flex;align-items:center;justify-content:space-between;margin:4px 0}
+                    #gyro-ui label{width:36px;color:rgba(255,255,255,0.7)}
+                    #gyro-ui input{flex:1;margin-left:6px}
+                    /* range (slider) - 黑灰主题 */
+                    #gyro-ui input[type=range]{ -webkit-appearance:none; appearance:none; height:6px; background:transparent; }
+                    #gyro-ui input[type=range]::-webkit-slider-runnable-track{ height:6px; background:#444; border-radius:6px; }
+                    #gyro-ui input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:#111; border:2px solid #777; margin-top:-4px; }
+                    #gyro-ui input[type=range]::-moz-range-track{ height:6px; background:#444; border-radius:6px; }
+                    #gyro-ui input[type=range]::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; background:#111; border:2px solid #777; }
+                    #gyro-ui button{ width:48px; height:22px; border-radius:4px; background:#222; color:#ddd; border:1px solid #444; cursor:pointer }
+                `;
+                document.head.appendChild(style);
+
+                // Bind controls
+                const alphaEl = document.getElementById('gyro-alpha');
+                const gainEl = document.getElementById('gyro-gain');
+                const lerpEl = document.getElementById('gyro-lerp');
+                const toggleEl = document.getElementById('gyro-toggle');
+
+                function syncFromWindow(){
+                    alphaEl.value = window.gyroAlpha;
+                    gainEl.value = window.gyroToAngleGain;
+                    lerpEl.value = window.gyroLerpSpeed;
+                    toggleEl.textContent = window.gyroControlEnabled ? 'ON' : 'OFF';
+                    toggleEl.style.opacity = window.gyroControlEnabled ? '0.95' : '0.4';
+                }
+
+                alphaEl.addEventListener('input', ()=>{ window.gyroAlpha = parseFloat(alphaEl.value); });
+                gainEl.addEventListener('input', ()=>{ window.gyroToAngleGain = parseFloat(gainEl.value); });
+                lerpEl.addEventListener('input', ()=>{ window.gyroLerpSpeed = parseFloat(lerpEl.value); });
+                toggleEl.addEventListener('click', ()=>{ window.gyroControlEnabled = !window.gyroControlEnabled; syncFromWindow(); });
+
+                // initialize values
+                syncFromWindow();
+
+                // Ctrl+G 快捷键：切换 gyro-ui 显示/隐藏（按住 Ctrl 再按 G）
+                (function(){
+                    let visible = true;
+                    function handler(e){
+                        if((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'g'){
+                            visible = !visible;
+                            ui.style.display = visible ? '' : 'none';
+                            // prevent browser shortcuts when toggling
+                            e.preventDefault();
+                        }
+                    }
+                    document.addEventListener('keydown', handler);
+                })();
+            }
         }
 
         // 启动连接

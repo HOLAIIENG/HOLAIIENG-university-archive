@@ -117,6 +117,26 @@ function Player(){
             vel[2] += cos(this.angle[0]);
             vel[0] += sin(this.angle[0]);
         }
+
+        // 使用平滑后的 gyroscope_x 映射为目标角度，并使用插值逼近（稳定朝向控制）
+        if(typeof window !== 'undefined' && window.gyroControlEnabled){
+            const smooth = (typeof window.smoothedGyroX !== 'undefined') ? window.smoothedGyroX : (window.gyroscope_x || 0);
+            const gain = (typeof window.gyroToAngleGain !== 'undefined') ? window.gyroToAngleGain : 0.02;
+            // 将陀螺仪值映射为目标偏航角并反转左右（用户要求反向控制）
+            const targetAngle = - smooth * gain; // 取负实现左右反转
+
+            // 插值权重根据全局 dt 和配置的速度计算
+            const baseLerp = (typeof window.gyroLerpSpeed !== 'undefined') ? window.gyroLerpSpeed : 0.12;
+            const weight = baseLerp * ( (typeof dt !== 'undefined') ? (dt / (1/120)) : 1 );
+
+            // 使用角度友好的插值函数 aLerp（处理环绕）
+            try{
+                this.angle[0] = aLerp(this.angle[0], targetAngle, Math.min(Math.max(weight, 0), 1));
+            } catch(e){
+                // 兜底：普通线性插值
+                this.angle[0] = lerp(this.angle[0], targetAngle, Math.min(Math.max(weight, 0), 1));
+            }
+        }
         if(keyDown["w"]){
             vel[2] += cos(this.angle[0]);
             vel[0] += sin(this.angle[0]);
