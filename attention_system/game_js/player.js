@@ -112,6 +112,11 @@ function Player(){
     this.move = () => {
         let vel = [0,0,0];
 
+        // 自动前进支持：当全局 autoRun 为 true 时，角色会持续向前移动
+        if(typeof autoRun !== 'undefined' && autoRun){
+            vel[2] += cos(this.angle[0]);
+            vel[0] += sin(this.angle[0]);
+        }
         if(keyDown["w"]){
             vel[2] += cos(this.angle[0]);
             vel[0] += sin(this.angle[0]);

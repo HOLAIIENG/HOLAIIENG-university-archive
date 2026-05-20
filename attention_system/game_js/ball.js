@@ -14,22 +14,34 @@ function Ball(pos){
     this.xFriction = 0.5;
 
     this.velocity = [0,0,0];
-    this.size = 3;
+    // desired size (may be clamped to a minimum to avoid physics instability)
+    this.size = 0.1;
+    this.minSize = 0.05;
+    if(this.size < this.minSize){
+        console.warn("Ball size too small, clamping to minSize:", this.minSize);
+        this.size = this.minSize;
+    }
 
     this.onGround = () => {
-        return de(plus(this.pos, [0, -this.size, 0])) < 0.2;
+        // threshold scaled with size to avoid incorrect ground detection for very small balls
+        let thresh = Math.max(0.02, this.size * 0.5);
+        return de(plus(this.pos, [0, -this.size, 0])) < thresh;
     }
 
     this.update = () => {
         if(de(this.pos) <= this.size){
             this.velocity = times(reflect(this.velocity, deNormal(this.pos)), 1);
             this.velocity[1] *= 1-this.yFriction;
-            this.rotVel = -Math.hypot(this.velocity[0], this.velocity[2])/this.size;
+            // avoid dividing by an extremely small size
+            this.rotVel = -Math.hypot(this.velocity[0], this.velocity[2]) / Math.max(this.size, 0.01);
             this.rotAxis = (cross(normalize([this.velocity[0], 0, this.velocity[2]]), [0, 1, 0]));
         }
 
-        while(de(this.pos) < this.size){
+        // project out of geometry if penetrating; limit iterations to avoid infinite loops
+        let iter = 0;
+        while(de(this.pos) < this.size && iter < 10){
             this.pos = plus(this.pos, times(deNormal(this.pos), -(de(this.pos) - this.size)));
+            iter++;
         }
 
         if(this.onGround() && abs(this.velocity[1]) < 0.5){
@@ -37,7 +49,7 @@ function Ball(pos){
             this.velocity[0] *= 1-this.xFriction*dt;
             this.velocity[2] *= 1-this.xFriction*dt;
 
-            this.rotVel = -Math.hypot(this.velocity[0], this.velocity[2])/this.size;
+            this.rotVel = -Math.hypot(this.velocity[0], this.velocity[2]) / Math.max(this.size, 0.01);
             this.rotAxis = (cross(normalize([this.velocity[0], 0, this.velocity[2]]), [0, 1, 0]));
 
         } else {
@@ -57,6 +69,8 @@ function Ball(pos){
     this.updateUniforms = () => {
         renderer.setUni("ballPos", this.pos);
         renderer.setUni("ballRotMat", this.rotMat);
+        // keep shader informed of the ball radius so rendering matches physics
+        renderer.setUni("ballSize", this.size);
     }
 
     this.de = (p) => {

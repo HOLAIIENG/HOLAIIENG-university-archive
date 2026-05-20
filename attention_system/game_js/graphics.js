@@ -3,8 +3,9 @@ let renderer = new Renderer(
 //de
 `
 float rings(vec3 p){
-    float rad = 3.;
-    float inRad = 3.;
+    // use ballSize so ring details scale with the ball
+    float rad = ballSize;
+    float inRad = ballSize;
     float ringThickness = 0.3;
     vec3 r1P = p;
     r1P = twist(r1P, 0.3);
@@ -31,13 +32,14 @@ float rings(vec3 p){
 }
 
 float ball(vec3 p){
-    if(length(p-ballPos) > 3.5){
-        return sdSphere(p-ballPos, 3.);
+    // early-out when far from ball to speed up rendering
+    if(length(p-ballPos) > ballSize + 0.5){
+        return sdSphere(p-ballPos, ballSize);
     }
     p -= ballPos;
     p = ballRotMat*p;
-    float rad = 3.;
-    float inRad = 3.;
+    float rad = ballSize;
+    float inRad = ballSize;
 
     float innerSphere = sdSphere(p, inRad);
 
@@ -48,7 +50,7 @@ float ball(vec3 p){
 }
 
 float ball2(vec3 p){
-    return sdSphere(p-ballPos,3.);
+    return sdSphere(p-ballPos, ballSize);
 }
 
 float playerFace(vec3 p2){
@@ -260,14 +262,15 @@ if(dist <= MIN_DIST){
     vec3 norm = grad(p);
 
     col = norm;
-    if(length(p - ballPos) <= 3.005){
+    // expand the solid ball pixel region by a configurable margin so the ball reads as more opaque
+    if(length(p - ballPos) <= ballSize + ballSolidMargin){
         vec3 p2 = p-ballPos;
         p2 = ballRotMat*p2;
 
 
         col = vec3(0.,0.2,.2) + vec3(vec3(clamp(dot(normalize(vec3(-0.2, .4, -0.5)), norm), 0., 1.)));
 
-        if(length(p2) > 3.){
+        if(length(p2) > ballSize + ballSolidMargin){
             col = vec3(0.1);
         }
 
@@ -276,7 +279,8 @@ if(dist <= MIN_DIST){
             col += 1./(1.+10.*rDist);
         }
 
-        if(length(p2) < 3.){
+        // treat a slightly larger interior as solid to reduce see-through appearance
+        if(length(p2) < ballSize + ballSolidMargin){
             col = vec3(1.);
         }
 
@@ -452,7 +456,8 @@ if(dist <= MIN_DIST){
     color = vec4(0.,0.,0.,1.);
 }
 
-color = vec4(col, 1.);
+// use ballOpacity uniform to control final fragment alpha (0.0 - fully transparent, 1.0 - fully opaque)
+color = vec4(col, ballOpacity);
 
 color = pow(color, vec4(1.));
 `, 
@@ -522,6 +527,9 @@ uniform vec3 uChestPos;
 uniform vec3 uHeadPos;
 uniform float uLift;
 uniform vec3 uBodyAngle;
+uniform float ballSize;
+uniform float ballSolidMargin;
+uniform float ballOpacity;
 `
 );
 

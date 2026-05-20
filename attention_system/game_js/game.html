@@ -29,10 +29,55 @@
             border: 0.2vh solid white;
             mix-blend-mode: difference;
         }
+        /* 隐蔽的算法数据显示（右上角） */
+        #algorithm-data {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            color: rgba(255,255,255,0.28);
+            font-size: 11px;
+            text-align: right;
+            z-index: 9998;
+            pointer-events: none;
+            font-family: monospace;
+            line-height: 1.2;
+            backdrop-filter: blur(2px);
+        }
+        #algorithm-data div { margin-bottom: 2px; }
+        /* 隐蔽的自动前进开关（左上角） */
+        #auto-run-btn {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 9999;
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.85);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 6px 8px;
+            font-size: 12px;
+            font-family: monospace;
+            border-radius: 6px;
+            cursor: pointer;
+            backdrop-filter: blur(2px);
+            pointer-events: auto;
+            opacity: 0.9;
+        }
+        #auto-run-btn.inactive { opacity: 0.45; }
     </style>
 </head>
 <body>
+    <!-- 自动前进开关（默认开启，隐藏且不打扰） -->
+    <button id="auto-run-btn" title="切换自动前进">AutoRun: ON</button>
     <div id="cursor"></div>
+    <!-- 隐蔽的算法数据显示容器（参考 game/index.html 的实现） -->
+    <div id="algorithm-data">
+        <div>GyroX: <span id="gyro-x">0.00</span></div>
+        <div>GyroY: <span id="gyro-y">0.00</span></div>
+        <div>GyroZ: <span id="gyro-z">0.00</span></div>
+        <div>Attn: <span id="attn-val">0.00</span></div>
+        <div>CursorX: <span id="cursor-x">0</span></div>
+        <div>CursorY: <span id="cursor-y">0</span></div>
+    </div>
 </body>
 <script src="libs.js"></script>
 <script src="animation.js"></script>
@@ -41,4 +86,68 @@
 <script src="player.js"></script>
 <script src="ball.js"></script>
 <script src="game.js"></script>
+<script>
+    // WebSocket for algorithm data (隐蔽显示，参考 index.html 的逻辑)
+    (function(){
+        const WS_URL = 'ws://localhost:8765';
+        let ws = null;
+
+        function initWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+                ws.onopen = function() { console.log('[WebSocket] 已连接到服务器'); };
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        updateAlgorithmData(
+                            data.gyroscope_x, data.gyroscope_y, data.gyroscope_z,
+                            data.attention, data.focus_area_width, data.focus_area_height,
+                            data.focus_area_x, data.focus_area_y, data.focus_x, data.focus_y
+                        );
+                    } catch (e) { console.error('[WebSocket] 数据解析错误:', e); }
+                };
+                ws.onerror = function(err) { console.error('[WebSocket] 错误:', err); };
+                ws.onclose = function() { console.log('[WebSocket] 连接已关闭，5秒后重连...'); setTimeout(initWebSocket, 5000); };
+            } catch (e) {
+                console.error('[WebSocket] 连接失败:', e);
+            }
+        }
+
+        function updateAlgorithmData(gyroX, gyroY, gyroZ, attention, focusWidth, focusHeight, focusAreaX, focusAreaY, focusX, focusY) {
+            document.getElementById('gyro-x').innerText = (gyroX || 0).toFixed(2);
+            document.getElementById('gyro-y').innerText = (gyroY || 0).toFixed(2);
+            document.getElementById('gyro-z').innerText = (gyroZ || 0).toFixed(2);
+            document.getElementById('attn-val').innerText = (attention || 0).toFixed(2);
+            document.getElementById('cursor-x').innerText = Math.round(focusX || 0);
+            document.getElementById('cursor-y').innerText = Math.round(focusY || 0);
+        }
+
+        // 启动连接
+        initWebSocket();
+    })();
+
+    // 自动前进开关逻辑（默认开启）
+    (function(){
+        window.autoRun = true;
+        const btn = document.getElementById('auto-run-btn');
+        if(!btn) return;
+
+        function updateBtn(){
+            btn.textContent = 'AutoRun: ' + (window.autoRun ? 'ON' : 'OFF');
+            if(window.autoRun){
+                btn.classList.remove('inactive');
+            } else {
+                btn.classList.add('inactive');
+            }
+        }
+
+        btn.addEventListener('click', (e)=>{
+            window.autoRun = !window.autoRun;
+            updateBtn();
+        });
+
+        // 初始化样式
+        updateBtn();
+    })();
+</script>
 </html>

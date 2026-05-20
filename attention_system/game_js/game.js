@@ -15,6 +15,10 @@ renderer.addUniform("playerPos", "vec3", [0,0,0]);
 renderer.addUniform("playerAngle", "vec2", [0,0]);
 
 renderer.addUniform("ballRotMat", "mat3", I());
+renderer.addUniform("ballSize", "float", ball.size);
+// visual tuning uniforms: margin to expand the solid pixel region and final opacity
+renderer.addUniform("ballSolidMargin", "float", 0.02);
+renderer.addUniform("ballOpacity", "float", 1.0);
 
 renderer.draw();
 

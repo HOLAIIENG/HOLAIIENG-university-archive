@@ -14,6 +14,9 @@ function createGraphics(de, colors, otherfunctions, uniforms){
     }
 
     let gl = c.getContext("webgl2");
+    // enable alpha blending so fragment alpha (ball opacity) is respected
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     function makeShader(src, type){
         let shader = gl.createShader(type);
@@ -139,7 +142,8 @@ function createGraphics(de, colors, otherfunctions, uniforms){
 
     gl.viewport(0, 0, c.width, c.height);
 
-    gl.clearColor(0, 0, 0, 0);
+    // make the canvas fully opaque to avoid compositing transparency with the page
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.useProgram(program);
