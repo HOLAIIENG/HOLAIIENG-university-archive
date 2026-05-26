@@ -137,6 +137,13 @@
         let focus_x = 0;
         let focus_y = 0;
         
+        // 滤波后的焦点坐标（用于实际控制）
+        let filtered_focus_x = 0;
+        let filtered_focus_y = 0;
+        // EMA 滤波系数：0~1，越小越平滑（灵敏度越低）
+        const FOCUS_EMA_ALPHA_X = 0.3;  // X方向（左右）更平滑
+        const FOCUS_EMA_ALPHA_Y = 0.6;  // Y方向（跳跃）响应更快
+        
         // 上一帧的陀螺仪数据，用于计算变化量
         let last_gyroscope_x = 0;
         let last_gyroscope_y = 0;
@@ -447,30 +454,39 @@
             document.getElementById('gyro-y').innerText = gyroscope_y.toFixed(2);
             document.getElementById('gyro-z').innerText = gyroscope_z.toFixed(2);
             document.getElementById('attn-val').innerText = attention_value.toFixed(2);
-            document.getElementById('cursor-x').innerText = focus_x.toFixed(0);
-            document.getElementById('cursor-y').innerText = focus_y.toFixed(0);
+            document.getElementById('cursor-x').innerText = filtered_focus_x.toFixed(0);
+            document.getElementById('cursor-y').innerText = filtered_focus_y.toFixed(0);
 
             composer.render();
         }
 
+        // 换道冷却帧数，防止一次跨两轨
+        let laneChangeCooldown = 0;
+        const LANE_CHANGE_COOLDOWN_FRAMES = 45;  // 约0.25秒冷却
+
         // 根据光标数据更新角色位置
         function updatePlayerPositionFromGyro() {
-            // 计算光标数据的相对位移
-            const deltaX = focus_x - last_cursor_x;
-            const deltaY = focus_y - last_cursor_y;
+            // 减少换道冷却
+            if (laneChangeCooldown > 0) laneChangeCooldown--;
+
+            // 计算光标数据的相对位移（使用滤波后的值）
+            const deltaX = filtered_focus_x - last_cursor_x;
+            const deltaY = filtered_focus_y - last_cursor_y;
             
             // 设置阈值，只有当位移超过一定值时才认为是有意义的移动
             const moveThreshold = 50;  // 左右移动阈值（像素）
             const jumpThreshold = 80;  // 跳跃阈值（像素）
             
-            // 水平方向移动（左右）- 基于 CursorX 相对位移
-            if (Math.abs(deltaX) > moveThreshold) {
+            // 水平方向移动（左右）- 基于 CursorX 相对位移，冷却期内不响应
+            if (laneChangeCooldown === 0 && Math.abs(deltaX) > moveThreshold) {
                 if (deltaX > 0 && currentLane < 1) {
                     // 向右移动
                     currentLane++;
+                    laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
                 } else if (deltaX < 0 && currentLane > -1) {
                     // 向左移动
                     currentLane--;
+                    laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
                 }
             }
             
@@ -482,9 +498,9 @@
                 }
             }
             
-            // 更新上一帧的数据
-            last_cursor_x = focus_x;
-            last_cursor_y = focus_y;
+            // 更新上一帧的数据（使用滤波后的值）
+            last_cursor_x = filtered_focus_x;
+            last_cursor_y = filtered_focus_y;
         }
 
         // 键盘控制逻辑
@@ -632,6 +648,10 @@
             focus_area_y = focusAreaY || 0;
             focus_x = focusX || 0;
             focus_y = focusY || 0;
+            
+            // 对 focus_x / focus_y 做 EMA 低通滤波
+            filtered_focus_x = FOCUS_EMA_ALPHA_X * focus_x + (1 - FOCUS_EMA_ALPHA_X) * filtered_focus_x;
+            filtered_focus_y = FOCUS_EMA_ALPHA_Y * focus_y + (1 - FOCUS_EMA_ALPHA_Y) * filtered_focus_y;
             
             // 根据 attention 值实时更新专注度能量条 (确保 0-100 范围)
             focusValue = Math.min(100, Math.max(0, attention_value));
