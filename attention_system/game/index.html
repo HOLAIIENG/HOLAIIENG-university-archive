@@ -17,11 +17,11 @@
             border: 2px solid rgba(255,255,255,0.3);
             box-shadow: 0 0 15px rgba(0,242,255,0.3);
         }
-        #focus-bar {
+        #attn-bar {
             width: 30%; height: 100%;
             background: linear-gradient(90deg, #ff6b6b 0%, #ffd93d 50%, #6bcf7f 100%);
-            transition: width 0.3s ease-out;
-            box-shadow: 0 0 10px rgba(0,255,136,0.6);
+            transition: width 0.1s linear;
+            box-shadow: 0 0 10px rgba(0,255,136,0.25);
         }
         .controls { position: absolute; bottom: 20px; width: 100%; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; }
         /* 隐蔽的算法数据显示 */
@@ -54,14 +54,41 @@
             30% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
             100% { opacity: 0; transform: translate(-50%, -80%) scale(1.0); }
         }
+        /* 积分变动蒙太奇（精简样式：纯色文字，无背景） */
+        .score-montage {
+            --montage-font-size: 28px;
+            position: absolute;
+            top: 32%; /* 初始参考与提醒信息同一高度（会被 JS 精准定位） */
+            left: 50%;
+            transform: translateX(-50%) translateY(-50%);
+            font-size: var(--montage-font-size);
+            font-weight: 700;
+            line-height: 1;
+            padding: 0 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: transform 280ms cubic-bezier(.2,.9,.2,1), opacity 280ms ease-out;
+            z-index: 300;
+            text-shadow: none;
+            background: transparent;
+            filter: saturate(0.55) brightness(0.75);
+            text-align: center;
+        }
+        .score-montage.show {
+            opacity: 1;
+            /* 当无额外定位时，CSS 保持一个小的上移动画；JS 会在需要时覆盖 transform 以实现精确定位 */
+            transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size)));
+        }
+        .score-montage.pos { color: rgba(40,100,40,0.9); }
+        .score-montage.neg { color: rgba(110,50,50,0.9); }
     </style>
 </head>
 <body>
     <div id="ui">
         <div style="font-size: 16px; letter-spacing: 3px; font-weight: bold;">DREAMCORE RUNNER</div>
         <div style="font-size: 32px; margin-top: 8px; font-weight: bold;">Score: <span id="score-val">0</span></div>
-        <div class="energy-bar-container"><div id="focus-bar"></div></div>
-        <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">⚡ Focus Energy: <span id="focus-val">30</span>%</div>
+        <div class="energy-bar-container"><div id="attn-bar"></div></div>
+        <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">⚡ Attn: <span id="attn-top">0</span>%</div>
     </div>
     <!-- 隐蔽的算法数据显示 -->
     <div id="algorithm-data">
@@ -93,7 +120,11 @@
         let obstacles = [];
         let hitCooldown = 0;  // 碰撞冷却帧数，防止连续触发
         let isFlashing = false;  // 角色是否正在闪烁
-        
+        // 积分/速度控制相关
+        let lastAttnTick = performance.now();
+        const attnTickInterval = 1000; // 毫秒：每秒根据 attention 更新积分和速度
+        let speedMultiplier = 1.0; // 根据 attention 调整移动速度
+
         // 算法数据变量
         let gyroscope_x = 0;
         let gyroscope_y = 0;
@@ -141,30 +172,9 @@
             player.position.y = 1;
             scene.add(player);
 
-            const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 2000), new THREE.MeshLambertMaterial({ color: 0xffd1dc }));
-            ground.rotation.x = -Math.PI / 2;
-            scene.add(ground);
-
-            // 添加三条轨道显示
-            const lanePositions = [-3, 0, 3]; // 左、中、右三条轨道的X坐标
-            lanePositions.forEach(x => {
-                // 创建轨道线
-                const lineGeometry = new THREE.BufferGeometry();
-                const lineMaterial = new THREE.LineBasicMaterial({ 
-                    color: 0xffffff, 
-                    transparent: true, 
-                    opacity: 0.3 
-                });
-                
-                // 创建从近到远的长线
-                const points = [];
-                points.push(new THREE.Vector3(x, 0.01, player.position.z + 10));
-                points.push(new THREE.Vector3(x, 0.01, player.position.z - 200));
-                lineGeometry.setFromPoints(points);
-                
-                const line = new THREE.Line(lineGeometry, lineMaterial);
-                scene.add(line);
-            });
+            // 使用可扩展的地面与轨道段（实现无限延伸，随相机生成/销毁）
+            // ... 初始化时不一次性创建长平面，而是由下面的 initInfiniteGroundAndLanes 管理
+            initInfiniteGroundAndLanes();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 
@@ -234,7 +244,126 @@
             const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
             obs.position.set(lane * 3, 0.6, player.position.z - 60);
             scene.add(obs);
+            // 标记用于得分/碰撞判断
+            obs._scored = false;
+            obs._jumped = false;
             obstacles.push(obs);
+        }
+
+        // ---------- 无限地面与轨道系统 ----------
+        const groundSegments = [];
+        const laneSegments = { '-3': [], '0': [], '3': [] };
+        const segmentLength = 40; // 每段长度（z方向）
+        const aheadRange = 240; // 相机向前需要的范围
+        const behindRange = 120; // 相机向后的保留范围
+
+        function initInfiniteGroundAndLanes() {
+            // 初始化时填充足够的段以覆盖相机前后范围
+            const cameraZ = (camera && camera.position) ? camera.position.z : player.position.z + 10;
+            const minZ = cameraZ - aheadRange;
+            const maxZ = cameraZ + behindRange;
+            for (let z = Math.floor(minZ / segmentLength) * segmentLength; z <= maxZ; z += segmentLength) {
+                const centerZ = z;
+                const g = createGroundSegment(centerZ);
+                groundSegments.push(g);
+                ['-3','0','3'].forEach(k => {
+                    const lane = createLaneSegment(parseInt(k), centerZ);
+                    laneSegments[k].push(lane);
+                });
+            }
+        }
+
+        function createGroundSegment(centerZ) {
+            const geo = new THREE.PlaneGeometry(60, segmentLength);
+            const mat = new THREE.MeshLambertMaterial({ color: 0xffd1dc });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.z = centerZ;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        function createLaneSegment(laneX, centerZ) {
+            // 用线段表示轨道：几何在本地坐标系中以段中心为原点，使用 line.position 设置全局位置
+            const half = segmentLength / 2;
+            const pts = [
+                new THREE.Vector3(0, 0.01, -half),
+                new THREE.Vector3(0, 0.01, half)
+            ];
+            const g = new THREE.BufferGeometry().setFromPoints(pts);
+            const m = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 });
+            const line = new THREE.Line(g, m);
+            line.position.set(laneX, 0, centerZ);
+            scene.add(line);
+            return line;
+        }
+
+        function disposeMesh(mesh) {
+            try {
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    if (Array.isArray(mesh.material)) mesh.material.forEach(mat => mat.dispose());
+                    else mesh.material.dispose();
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        function updateInfiniteGroundAndLanes() {
+            const cameraZ = camera.position.z;
+            const minZ = cameraZ - aheadRange;
+            const maxZ = cameraZ + behindRange;
+
+            // 移除在摄像机后方过远的地面段
+            for (let i = groundSegments.length - 1; i >= 0; i--) {
+                const seg = groundSegments[i];
+                if (seg.position.z > maxZ + segmentLength) {
+                    scene.remove(seg);
+                    disposeMesh(seg);
+                    groundSegments.splice(i, 1);
+                }
+            }
+
+            // 移除轨道段
+            Object.keys(laneSegments).forEach(k => {
+                const arr = laneSegments[k];
+                for (let i = arr.length - 1; i >= 0; i--) {
+                    const seg = arr[i];
+                    // seg.position.z 已设置为段中心的 z
+                    if (seg.position.z > maxZ + segmentLength || seg.position.z < minZ - segmentLength) {
+                        scene.remove(seg);
+                        disposeMesh(seg);
+                        arr.splice(i, 1);
+                    }
+                }
+            });
+
+            // 找到当前已有段的 min/max center z
+            let currentMin = Infinity, currentMax = -Infinity;
+            if (groundSegments.length) {
+                groundSegments.forEach(s => { currentMin = Math.min(currentMin, s.position.z); currentMax = Math.max(currentMax, s.position.z); });
+            }
+            // 如果没有段，设为摄像机范围
+            if (!isFinite(currentMin)) { currentMin = Math.floor(minZ / segmentLength) * segmentLength; currentMax = Math.floor(maxZ / segmentLength) * segmentLength; }
+
+            // 在前方（更小 z 值）补充段，直到覆盖 minZ
+            for (let z = currentMin - segmentLength; z >= minZ; z -= segmentLength) {
+                const g = createGroundSegment(z);
+                groundSegments.push(g);
+                ['-3','0','3'].forEach(k => {
+                    const lane = createLaneSegment(parseInt(k), z);
+                    laneSegments[k].push(lane);
+                });
+            }
+
+            // 在后方（更大 z 值）补充段，直到覆盖 maxZ
+            for (let z = currentMax + segmentLength; z <= maxZ; z += segmentLength) {
+                const g = createGroundSegment(z);
+                groundSegments.push(g);
+                ['-3','0','3'].forEach(k => {
+                    const lane = createLaneSegment(parseInt(k), z);
+                    laneSegments[k].push(lane);
+                });
+            }
         }
 
         function animate() {
@@ -250,19 +379,45 @@
             }
 
             // 专注度与速度耦合 [cite: 10, 16, 33]
-            const currentSpeed = 0.15 + 0.00005 * Math.pow(focusValue, 2);
+            const baseSpeed = 0.15 + 0.00005 * Math.pow(focusValue, 2);
+            const currentSpeed = baseSpeed * speedMultiplier;
             player.position.z -= currentSpeed;
-            
-            // 使用陀螺仪数据控制角色移动
+
+            // 使用陀螺仪/焦点数据控制角色移动
             updatePlayerPositionFromGyro();
-            
+
             player.position.x += (currentLane * 3 - player.position.x) * 0.1;
 
-            // 碰撞检测
+            // 更新并维护无限地面与轨道（移到相机更新后以使用更新后的 camera.position）
+
+            // 碰撞与跳过检测（并处理跳过得分）
             obstacles.forEach((obs, index) => {
-                if (Math.abs(obs.position.z - player.position.z) < 0.8 && Math.abs(obs.position.x - player.position.x) < 0.8 && player.position.y < 1.5) {
-                    if (hitCooldown <= 0 && !isFlashing) {
-                        onPlayerHit();
+                const dz = obs.position.z - player.position.z;
+                const dx = obs.position.x - player.position.x;
+
+                // 当到达近距离时，记录是否是跳跃通过
+                if (Math.abs(dz) < 0.8 && Math.abs(dx) < 0.8) {
+                    if (player.position.y > 1.5) {
+                        // 玩家在空中，通过盒子视为跳过
+                        obs._jumped = true;
+                    } else {
+                        // 玩家不在空中且在同轨道 => 碰撞
+                        if (hitCooldown <= 0 && !isFlashing && !obs._scored) {
+                            obs._scored = true; // 防止重复处理
+                            onPlayerHit();
+                        }
+                    }
+                }
+
+                // 当障碍物被玩家越过（玩家位置继续向前）且尚未被计分
+                if (!obs._scored && dz > 1) {
+                    if (obs._jumped) {
+                        obs._scored = true;
+                        score = Math.max(0, score + 2);
+                        showScoreChange(2);
+                    } else {
+                        // 未跳跃也标记已通过，避免重复检查
+                        obs._scored = true;
                     }
                 }
             });
@@ -271,12 +426,22 @@
             camera.position.lerp(new THREE.Vector3(player.position.x * 0.5, 5, player.position.z + 10), 0.05);
             camera.lookAt(player.position.x, 0, player.position.z - 5);
 
+            // 更新并维护无限地面与轨道（使用已更新的 camera.position）
+            updateInfiniteGroundAndLanes();
+
+            // 每秒根据 attention 更新积分与速度（在 animate 循环中以定时器方式触发）
+            const now = performance.now();
+            if (now - lastAttnTick >= attnTickInterval) {
+                lastAttnTick = now;
+                applyAttnEffects();
+            }
+
             // 更新 UI [cite: 38]
-            score++;
-            document.getElementById('score-val').innerText = Math.floor(score/10);
-            document.getElementById('focus-val').innerText = focusValue;
-            document.getElementById('focus-bar').style.width = focusValue + '%';
-            
+            document.getElementById('score-val').innerText = score;
+            // 实时显示 attention（顶部），保留右侧 attn 精确值
+            document.getElementById('attn-top').innerText = Math.round(attention_value);
+            document.getElementById('attn-bar').style.width = Math.min(100, Math.max(0, attention_value)) + '%';
+
             // 更新隐蔽的算法数据显示
             document.getElementById('gyro-x').innerText = gyroscope_x.toFixed(2);
             document.getElementById('gyro-y').innerText = gyroscope_y.toFixed(2);
@@ -365,9 +530,10 @@
         function onPlayerHit() {
             hitCooldown = 60;  // 约1秒冷却（60fps）
             
-            // 扣分惩罚
-            score = Math.max(0, score - 50);
-            
+            // 扣分惩罚：碰到箱子 -5 分，最低为 0
+            score = Math.max(0, score - 5);
+            showScoreChange(-5);
+
             // 角色双闪效果
             flashPlayer();
             
@@ -453,7 +619,13 @@
             gyroscope_x = gyroX || 0;
             gyroscope_y = gyroY || 0;
             gyroscope_z = gyroZ || 0;
-            attention_value = attention || 0;
+            // 对 attention 值做尺度判定：如果后端返回 0-1 范围则乘100，否则假设已经是 0-100
+            let attRaw = (attention !== undefined && attention !== null) ? attention : 0;
+            if (attRaw > 1) {
+                attention_value = attRaw;
+            } else {
+                attention_value = attRaw * 100;
+            }
             focus_area_width = focusWidth || 0;
             focus_area_height = focusHeight || 0;
             focus_area_x = focusAreaX || 0;
@@ -461,8 +633,107 @@
             focus_x = focusX || 0;
             focus_y = focusY || 0;
             
-            // 根据attention值实时更新专注度能量条 (attention范围通常是0-1，转换为0-100)
-            focusValue = Math.min(100, Math.max(0, attention_value * 100));
+            // 根据 attention 值实时更新专注度能量条 (确保 0-100 范围)
+            focusValue = Math.min(100, Math.max(0, attention_value));
+        }
+
+        // 积分蒙太奇：复用单个元素，支持连续相同分数计数（显示为 "+5 x3"）
+        let _montageEl = null;
+        let _montageHideTimer = null;
+        let _lastScoreKey = null; // e.g. "+5" or "-1"
+        let _lastScoreCount = 0;
+
+        function ensureMontageEl() {
+            if (_montageEl && document.body.contains(_montageEl)) return _montageEl;
+            _montageEl = document.createElement('div');
+            _montageEl.className = 'score-montage';
+            document.body.appendChild(_montageEl);
+            return _montageEl;
+        }
+
+        function positionMontage() {
+            const el = ensureMontageEl();
+            const reminderEl = document.getElementById('reminder');
+            // If reminder is visible and showing, position montage to its right at same vertical center
+            if (reminderEl && reminderEl.classList.contains('show')) {
+                const r = reminderEl.getBoundingClientRect();
+                const m = el.getBoundingClientRect();
+                const top = r.top + (r.height - m.height) / 2;
+                const left = r.right + 10; // 10px gap
+                el.style.left = left + 'px';
+                el.style.top = top + 'px';
+                el.style.transform = 'translateX(0) translateY(0)';
+            } else {
+                // center horizontally at the same height as reminder (or middle of viewport if reminder not found)
+                let centerY = window.innerHeight * 0.32; // default 32%
+                if (reminderEl) {
+                    const r = reminderEl.getBoundingClientRect();
+                    centerY = r.top + r.height / 2;
+                }
+                el.style.left = '50%';
+                el.style.top = centerY + 'px';
+                // 上移一个字体高度以满足用户要求（使用 CSS 变量，如果不可用回退到 28px）
+                el.style.transform = 'translateX(-50%) translateY(calc(-50% - var(--montage-font-size, 28px)))';
+            }
+        }
+
+        function showScoreChange(amount) {
+            if (!amount) return;
+            const key = (amount > 0 ? '+' : '') + amount;
+            const el = ensureMontageEl();
+
+            // 连续相同分值计数：若与上次相同则自增计数并更新文本
+            if (key === _lastScoreKey) {
+                _lastScoreCount++;
+            } else {
+                _lastScoreKey = key;
+                _lastScoreCount = 1;
+            }
+
+            // 文本格式：
+            el.classList.remove('pos', 'neg');
+            el.classList.add(amount > 0 ? 'pos' : 'neg');
+            const times = _lastScoreCount > 1 ? (' x' + _lastScoreCount) : '';
+            el.textContent = key + times;
+
+            // 重新定位（以便在提醒出现时靠右显示）
+            positionMontage();
+
+            // show
+            requestAnimationFrame(() => el.classList.add('show'));
+
+            // 重置隐藏计时器（延长显示时间以体现连续次数）
+            if (_montageHideTimer) clearTimeout(_montageHideTimer);
+            _montageHideTimer = setTimeout(() => {
+                el.classList.remove('show');
+                // 清除连续计数（下一次将被视为新一次）
+                _lastScoreKey = null;
+                _lastScoreCount = 0;
+                _montageHideTimer = null;
+            }, 1200);
+        }
+
+        // 每秒根据 attention 值调整积分与速度
+        function applyAttnEffects() {
+            const att = Math.min(100, Math.max(0, attention_value));
+            if (att < 10) {
+                // attention < 10: 每次 -1（但不得低于0），速度变慢
+                if (score > 0) {
+                    score = Math.max(0, score - 1);
+                    showScoreChange(-1);
+                }
+                speedMultiplier = 0.6;
+            } else if (att <= 30) {
+                // attention 10~30: +1，速度正常
+                score = Math.max(0, score + 1);
+                showScoreChange(1);
+                speedMultiplier = 1.0;
+            } else {
+                // attention >30: +5，速度加快
+                score = Math.max(0, score + 5);
+                showScoreChange(5);
+                speedMultiplier = 1.4;
+            }
         }
 
         init();
