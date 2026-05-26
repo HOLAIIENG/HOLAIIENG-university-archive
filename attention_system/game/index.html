@@ -34,6 +34,26 @@
         #algorithm-data div {
             margin-bottom: 2px;
         }
+        /* 专注提醒文字 */
+        #reminder {
+            position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%);
+            color: #c49790; font-size: 28px; font-weight: bold;
+            text-shadow: 0 0 20px rgba(196,151,144,0.5), 0 0 40px rgba(196,151,144,0.3);
+            z-index: 200; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s ease;
+            letter-spacing: 2px;
+            white-space: nowrap;
+        }
+        #reminder.show {
+            opacity: 1;
+            animation: reminderPulse 2s ease-out forwards;
+        }
+        @keyframes reminderPulse {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            30% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+            100% { opacity: 0; transform: translate(-50%, -80%) scale(1.0); }
+        }
     </style>
 </head>
 <body>
@@ -52,7 +72,8 @@
         <div>CursorX: <span id="cursor-x">0</span></div>
         <div>CursorY: <span id="cursor-y">0</span></div>
     </div>
-    <div class="controls">陀螺仪控制 - 左右移动/跳跃 | Space - 暂停/继续</div>
+    <div id="reminder"></div>
+    <div class="controls">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停/继续</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -70,7 +91,8 @@
         let score = 0, focusValue = 30; 
         let currentLane = 0; 
         let obstacles = [];
-        let gameOver = false;
+        let hitCooldown = 0;  // 碰撞冷却帧数，防止连续触发
+        let isFlashing = false;  // 角色是否正在闪烁
         
         // 算法数据变量
         let gyroscope_x = 0;
@@ -208,7 +230,6 @@
         }
 
         function spawnObstacle() {
-            if (gameOver) return;
             const lane = Math.floor(Math.random() * 3) - 1;
             const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
             obs.position.set(lane * 3, 0.6, player.position.z - 60);
@@ -217,8 +238,10 @@
         }
 
         function animate() {
-            if (gameOver) return;
             requestAnimationFrame(animate);
+            
+            // 减少碰撞冷却
+            if (hitCooldown > 0) hitCooldown--;
             
             // 如果游戏暂停，跳过更新逻辑
             if (isPaused) {
@@ -238,9 +261,9 @@
             // 碰撞检测
             obstacles.forEach((obs, index) => {
                 if (Math.abs(obs.position.z - player.position.z) < 0.8 && Math.abs(obs.position.x - player.position.x) < 0.8 && player.position.y < 1.5) {
-                    gameOver = true;
-                    alert("梦境破碎！");
-                    location.reload();
+                    if (hitCooldown <= 0 && !isFlashing) {
+                        onPlayerHit();
+                    }
                 }
             });
 
@@ -299,13 +322,122 @@
             last_cursor_y = focus_y;
         }
 
-        // 控制逻辑 - 只保留空格键暂停功能
+        // 键盘控制逻辑
         document.addEventListener('keydown', (e) => {
-            if (e.key === ' ') {
-                togglePause();
+            // 防止空格键滚动页面
+            if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+            }
+            
+            if (isPaused && e.key !== 'p' && e.key !== 'P') return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    // 向左移动轨道
+                    if (currentLane > -1) {
+                        currentLane--;
+                    }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    // 向右移动轨道
+                    if (currentLane < 1) {
+                        currentLane++;
+                    }
+                    break;
+                case ' ':
+                    // 空格跳跃
+                    if (player.position.y <= 1.1) {
+                        gsap.to(player.position, { y: 3, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
+                    }
+                    break;
+                case 'p':
+                case 'P':
+                    togglePause();
+                    break;
             }
         });
         
+        // 碰撞处理：角色闪烁 + 提醒文字
+        function onPlayerHit() {
+            hitCooldown = 60;  // 约1秒冷却（60fps）
+            
+            // 扣分惩罚
+            score = Math.max(0, score - 50);
+            
+            // 角色双闪效果
+            flashPlayer();
+            
+            // 显示提醒文字
+            showReminder();
+        }
+        
+        // 角色双闪效果
+        function flashPlayer() {
+            isFlashing = true;
+            const originalEmissiveIntensity = player.material.emissiveIntensity;
+            const originalColor = player.material.color.getHex();
+            const originalEmissive = player.material.emissive.getHex();
+            
+            // 使用 GSAP 时间线实现双闪
+            const tl = gsap.timeline({ onComplete: () => { isFlashing = false; } });
+            
+            // 第一次闪烁 - 变红
+            tl.to(player.material, { 
+                emissiveIntensity: 2.0, 
+                duration: 0.08,
+                onStart: () => { player.material.color.set(0xff4444); player.material.emissive.set(0xff0000); }
+            })
+            .to(player.material, { 
+                emissiveIntensity: originalEmissiveIntensity, 
+                duration: 0.08,
+                onComplete: () => { player.material.color.setHex(originalColor); player.material.emissive.setHex(originalEmissive); }
+            })
+            // 短暂间隔
+            .to({}, { duration: 0.06 })
+            // 第二次闪烁 - 变红
+            .to(player.material, { 
+                emissiveIntensity: 2.0, 
+                duration: 0.08,
+                onStart: () => { player.material.color.set(0xff4444); player.material.emissive.set(0xff0000); }
+            })
+            .to(player.material, { 
+                emissiveIntensity: originalEmissiveIntensity, 
+                duration: 0.08,
+                onComplete: () => { player.material.color.setHex(originalColor); player.material.emissive.setHex(originalEmissive); }
+            });
+        }
+        
+        // 显示专注提醒文字
+        function showReminder() {
+            const reminders = [
+                '集中注意力哦！💪',
+                '别走神，继续跑！🏃',
+                '专注！你可以的！⚡',
+                '保持专注，冲！🔥',
+                '注意力集中起来！👀',
+                '加油，别被干扰！✨',
+                '盯紧前方！🎯',
+                '稳住，集中精神！🌟'
+            ];
+            const msg = reminders[Math.floor(Math.random() * reminders.length)];
+            const reminderEl = document.getElementById('reminder');
+            
+            reminderEl.textContent = msg;
+            reminderEl.classList.remove('show');
+            // 强制回流后重新添加动画
+            void reminderEl.offsetWidth;
+            reminderEl.classList.add('show');
+            
+            // 动画结束后清除
+            setTimeout(() => {
+                reminderEl.classList.remove('show');
+            }, 2100);
+        }
+
         // 暂停/继续游戏
         function togglePause() {
             isPaused = !isPaused;
