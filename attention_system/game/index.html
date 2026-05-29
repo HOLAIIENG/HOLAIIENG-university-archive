@@ -37,28 +37,29 @@
         /* 专注提醒文字 */
         #reminder {
             position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%);
-            color: #c49790; font-size: 28px; font-weight: bold;
-            text-shadow: 0 0 20px rgba(196,151,144,0.5), 0 0 40px rgba(196,151,144,0.3);
+            color: #e8a9a0; font-size: 30px; font-weight: bold;
+            text-shadow: 0 0 12px rgba(232,169,160,0.6), 0 0 30px rgba(232,169,160,0.3), 0 0 60px rgba(232,169,160,0.15);
             z-index: 200; pointer-events: none;
             opacity: 0; transition: opacity 0.3s ease;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             white-space: nowrap;
         }
         #reminder.show {
             opacity: 1;
-            animation: reminderPulse 2s ease-out forwards;
+            animation: reminderPulse 2.2s cubic-bezier(.2,.8,.3,1) forwards;
         }
         @keyframes reminderPulse {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-            30% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
-            100% { opacity: 0; transform: translate(-50%, -80%) scale(1.0); }
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); filter: blur(6px); }
+            12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.08); filter: blur(0); }
+            25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+            70%  { opacity: 0.9; transform: translate(-50%, -60%) scale(1.0); }
+            100% { opacity: 0; transform: translate(-50%, -85%) scale(0.95); filter: blur(3px); }
         }
-        /* 积分变动蒙太奇（精简样式：纯色文字，无背景） */
+        /* 积分变动蒙太奇 */
         .score-montage {
             --montage-font-size: 28px;
             position: absolute;
-            top: 32%; /* 初始参考与提醒信息同一高度（会被 JS 精准定位） */
+            top: 32%;
             left: 50%;
             transform: translateX(-50%) translateY(-50%);
             font-size: var(--montage-font-size);
@@ -67,20 +68,85 @@
             padding: 0 6px;
             pointer-events: none;
             opacity: 0;
-            transition: transform 280ms cubic-bezier(.2,.9,.2,1), opacity 280ms ease-out;
             z-index: 300;
-            text-shadow: none;
             background: transparent;
-            filter: saturate(0.55) brightness(0.75);
             text-align: center;
+            letter-spacing: 1px;
+            transition: none;
         }
         .score-montage.show {
-            opacity: 1;
-            /* 当无额外定位时，CSS 保持一个小的上移动画；JS 会在需要时覆盖 transform 以实现精确定位 */
-            transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size)));
+            animation: scoreMontageAnim 1.4s cubic-bezier(.2,.8,.3,1) forwards;
         }
-        .score-montage.pos { color: rgba(40,100,40,0.9); }
-        .score-montage.neg { color: rgba(110,50,50,0.9); }
+        @keyframes scoreMontageAnim {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(-50%) scale(0.6); filter: blur(4px); }
+            15%  { opacity: 1; transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size) * 0.5)) scale(1.1); filter: blur(0); }
+            30%  { opacity: 1; transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size) * 0.7)) scale(1.0); }
+            75%  { opacity: 0.85; transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size) * 1.0)) scale(1.0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size) * 1.5)) scale(0.9); filter: blur(2px); }
+        }
+        /* 当蒙太奇与提醒并排时，使用无 translateX 的动画版本 */
+        @keyframes scoreMontageInlineAnim {
+            0%   { opacity: 0; transform: scale(0.6); filter: blur(4px); }
+            15%  { opacity: 1; transform: translateY(calc(var(--montage-font-size) * -0.3)) scale(1.1); filter: blur(0); }
+            30%  { opacity: 1; transform: translateY(calc(var(--montage-font-size) * -0.5)) scale(1.0); }
+            75%  { opacity: 0.85; transform: translateY(calc(var(--montage-font-size) * -0.7)) scale(1.0); }
+            100% { opacity: 0; transform: translateY(calc(var(--montage-font-size) * -1.2)) scale(0.9); filter: blur(2px); }
+        }
+        .score-montage.show-inline {
+            animation: scoreMontageInlineAnim 1.4s cubic-bezier(.2,.8,.3,1) forwards;
+        }
+        .score-montage.pos {
+            color: rgba(130, 220, 160, 0.95);
+            text-shadow: 0 0 10px rgba(130,220,160,0.5), 0 0 25px rgba(130,220,160,0.25);
+        }
+        .score-montage.neg {
+            color: rgba(230, 110, 110, 0.95);
+            text-shadow: 0 0 10px rgba(230,110,110,0.5), 0 0 25px rgba(230,110,110,0.25);
+        }
+        /* Combo 连击显示 */
+        #combo-display {
+            margin-top: 10px;
+            color: #ffd700; font-size: 22px; font-weight: bold;
+            text-shadow: 0 0 12px rgba(255,215,0,0.6), 0 0 24px rgba(255,215,0,0.3);
+            pointer-events: none;
+            opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease;
+            letter-spacing: 2px;
+            max-height: 0; overflow: hidden; transition: opacity 0.3s ease, max-height 0.3s ease;
+        }
+        #combo-display.show { opacity: 1; max-height: 40px; }
+        #combo-display.pulse {
+            animation: comboPulse 0.4s ease-out;
+        }
+        @keyframes comboPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.35); }
+            100% { transform: scale(1); }
+        }
+        /* 里程碑特效 */
+        #milestone {
+            position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 38px; font-weight: 900;
+            z-index: 350; pointer-events: none;
+            opacity: 0; letter-spacing: 4px;
+        }
+        #milestone.show {
+            animation: milestoneAnim 2s cubic-bezier(.2,.8,.3,1) forwards;
+        }
+        @keyframes milestoneAnim {
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-10deg); filter: blur(8px); }
+            12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.25) rotate(2deg); filter: blur(0); }
+            28%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0) rotate(0); }
+            75%  { opacity: 0.85; transform: translate(-50%, -60%) scale(1.0); }
+            100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); filter: blur(4px); }
+        }
+        #milestone.gold {
+            color: #ffd700;
+            text-shadow: 0 0 15px rgba(255,215,0,0.7), 0 0 30px rgba(255,215,0,0.4), 0 0 60px rgba(255,215,0,0.2);
+        }
+        #milestone.fire {
+            color: #ff6347;
+            text-shadow: 0 0 15px rgba(255,99,71,0.7), 0 0 30px rgba(255,99,71,0.4), 0 0 60px rgba(255,69,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -89,18 +155,20 @@
         <div style="font-size: 32px; margin-top: 8px; font-weight: bold;">Score: <span id="score-val">0</span></div>
         <div class="energy-bar-container"><div id="attn-bar"></div></div>
         <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">⚡ Attn: <span id="attn-top">0</span>%</div>
+        <div id="combo-display">Combo x0</div>
     </div>
+    <div id="milestone"></div>
     <!-- 隐蔽的算法数据显示 -->
     <div id="algorithm-data">
         <div>GyroX: <span id="gyro-x">0.00</span></div>
         <div>GyroY: <span id="gyro-y">0.00</span></div>
         <div>GyroZ: <span id="gyro-z">0.00</span></div>
         <div>Attn: <span id="attn-val">0.00</span></div>
-        <div>CursorX: <span id="cursor-x">0</span></div>
-        <div>CursorY: <span id="cursor-y">0</span></div>
+        <div>GyroX(yaw): <span id="cursor-x">0.00</span></div>
+        <div>GyroY(pitch): <span id="cursor-y">0.00</span></div>
     </div>
     <div id="reminder"></div>
-    <div class="controls">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停/继续</div>
+    <div class="controls">陀螺仪控制：偏头左右移动 | 抬头跳跃 | 键盘 ← → Space P 仍可用</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -137,12 +205,19 @@
         let focus_x = 0;
         let focus_y = 0;
         
-        // 滤波后的焦点坐标（用于实际控制）
+        // 滤波后的焦点坐标（用于显示）
         let filtered_focus_x = 0;
         let filtered_focus_y = 0;
         // EMA 滤波系数：0~1，越小越平滑（灵敏度越低）
         const FOCUS_EMA_ALPHA_X = 0.3;  // X方向（左右）更平滑
         const FOCUS_EMA_ALPHA_Y = 0.6;  // Y方向（跳跃）响应更快
+        
+        // 滤波后的陀螺仪数据（用于实际控制）
+        let filtered_gyro_x = 0;  // 偏航角，控制左右
+        let filtered_gyro_y = 0;  // 俯仰角，控制跳跃
+        // 陀螺仪 EMA 滤波系数
+        const GYRO_EMA_ALPHA_X = 0.25;  // 偏航角滤波：较平滑，避免抖动换道
+        const GYRO_EMA_ALPHA_Y = 0.45;  // 俯仰角滤波：适中，兼顾响应与稳定
         
         // 上一帧的陀螺仪数据，用于计算变化量
         let last_gyroscope_x = 0;
@@ -158,6 +233,36 @@
         // WebSocket连接
         let ws = null;
         const WS_URL = 'ws://localhost:8765';
+
+        // ---- Combo 连击系统 ----
+        let comboCount = 0;
+        let maxCombo = 0;
+        const COMBO_MIN = 2;  // 至少 2 连才显示
+
+        // ---- 奖励道具 ----
+        let rewardItems = [];
+        let scoreBuffMultiplier = 1.0;
+        let scoreBuffEndTime = 0;
+        let lastRewardSpawnTime = 0;
+
+        // ---- P0 场景视觉状态（平滑过渡用）----
+        let bloomPass, vignettePass;  // 后处理全局引用
+        const visualState = {
+            bloomStrength: 1.2,
+            vignetteDarkness: 1.2,
+            fogNear: 10, fogFar: 60,
+            groundR: 1.0, groundG: 0.82, groundB: 0.863,
+            playerEmissive: 0.5
+        };
+        // Attention 颜色配置 [attMin, bgHex, fogHex, groundHex]
+        const SCENE_THEMES = [
+            { max: 15,  bg: 0x4a3060, fog: 0x4a3060, ground: 0x8a6a80, fogNear: 5,  fogFar: 30, bloom: 0.4, vigDark: 2.0 },
+            { max: 40,  bg: 0xd8b5ff, fog: 0xd8b5ff, ground: 0xffd1dc, fogNear: 10, fogFar: 60, bloom: 1.2, vigDark: 1.2 },
+            { max: 70,  bg: 0xb5e8d0, fog: 0xb5e8d0, ground: 0xd4f5e0, fogNear: 20, fogFar: 80, bloom: 1.6, vigDark: 0.8 },
+            { max: 100, bg: 0xffe4a0, fog: 0xffd780, ground: 0xfff0c0, fogNear: 30, fogFar: 120, bloom: 2.0, vigDark: 0.5 }
+        ];
+        const PLAYER_DEFAULT_COLOR = 0x87ceeb;
+        const PLAYER_DEFAULT_EMISSIVE = 0x87ceeb;
 
         function init() {
             // 场景初始化 [cite: 19]
@@ -185,18 +290,19 @@
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 
-            // 后期处理初始化 (关键修复点：使用全局 THREE 访问) [cite: 13, 39]
+            // 后处理初始化（存储全局引用）
             composer = new THREE.EffectComposer(renderer);
             composer.addPass(new THREE.RenderPass(scene, camera));
 
-            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+            bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
             composer.addPass(bloomPass);
 
-            const vignettePass = new THREE.ShaderPass(THREE.VignetteShader);
+            vignettePass = new THREE.ShaderPass(THREE.VignetteShader);
             vignettePass.uniforms["offset"].value = 1.0;
             vignettePass.uniforms["darkness"].value = 1.2;
             composer.addPass(vignettePass);
 
+            spawnObstacle();
             setInterval(spawnObstacle, 1500);
             
             // 初始化WebSocket连接
@@ -405,8 +511,14 @@
                 // 当到达近距离时，记录是否是跳跃通过
                 if (Math.abs(dz) < 0.8 && Math.abs(dx) < 0.8) {
                     if (player.position.y > 1.5) {
-                        // 玩家在空中，通过盒子视为跳过
-                        obs._jumped = true;
+                        // 玩家在空中，通过盒子视为跳过（仅首次检测时递增 combo）
+                        if (!obs._jumped) {
+                            obs._jumped = true;
+                            comboCount++;
+                            obs._comboAtJump = comboCount;  // 记录跳跃瞬间的 combo 值
+                            if (comboCount > maxCombo) maxCombo = comboCount;
+                            checkComboMilestone();
+                        }
                     } else {
                         // 玩家不在空中且在同轨道 => 碰撞
                         if (hitCooldown <= 0 && !isFlashing && !obs._scored) {
@@ -420,10 +532,13 @@
                 if (!obs._scored && dz > 1) {
                     if (obs._jumped) {
                         obs._scored = true;
-                        score = Math.max(0, score + 2);
-                        showScoreChange(2);
+                        // 使用跳跃瞬间记录的 combo 值计算倍率，避免时序错位
+                        const jumpCombo = obs._comboAtJump || comboCount;
+                        const comboMul = 1 + Math.max(0, jumpCombo - 1) * 0.5;
+                        const jumpScore = Math.round(2 * comboMul * scoreBuffMultiplier);
+                        score = Math.max(0, score + jumpScore);
+                        showScoreChange(jumpScore);
                     } else {
-                        // 未跳跃也标记已通过，避免重复检查
                         obs._scored = true;
                     }
                 }
@@ -435,6 +550,16 @@
 
             // 更新并维护无限地面与轨道（使用已更新的 camera.position）
             updateInfiniteGroundAndLanes();
+
+            // P0: 场景视觉随 attention 变化
+            updateSceneVisuals(focusValue);
+            updatePlayerVisual(focusValue);
+
+            // P1: 奖励道具生成与收集
+            updateRewardItems();
+            if (performance.now() > scoreBuffEndTime && scoreBuffMultiplier > 1.0) {
+                scoreBuffMultiplier = 1.0;
+            }
 
             // 每秒根据 attention 更新积分与速度（在 animate 循环中以定时器方式触发）
             const now = performance.now();
@@ -449,13 +574,16 @@
             document.getElementById('attn-top').innerText = Math.round(attention_value);
             document.getElementById('attn-bar').style.width = Math.min(100, Math.max(0, attention_value)) + '%';
 
+            // 更新 combo 显示
+            updateComboDisplay();
+
             // 更新隐蔽的算法数据显示
             document.getElementById('gyro-x').innerText = gyroscope_x.toFixed(2);
             document.getElementById('gyro-y').innerText = gyroscope_y.toFixed(2);
             document.getElementById('gyro-z').innerText = gyroscope_z.toFixed(2);
             document.getElementById('attn-val').innerText = attention_value.toFixed(2);
-            document.getElementById('cursor-x').innerText = filtered_focus_x.toFixed(0);
-            document.getElementById('cursor-y').innerText = filtered_focus_y.toFixed(0);
+            document.getElementById('cursor-x').innerText = filtered_gyro_x.toFixed(2);
+            document.getElementById('cursor-y').innerText = filtered_gyro_y.toFixed(2);
 
             composer.render();
         }
@@ -464,43 +592,58 @@
         let laneChangeCooldown = 0;
         const LANE_CHANGE_COOLDOWN_FRAMES = 45;  // 约0.25秒冷却
 
-        // 根据光标数据更新角色位置
+        // 根据陀螺仪数据更新角色位置：GyroX偏航角→左右，GyroY俯仰角→跳跃
         function updatePlayerPositionFromGyro() {
             // 减少换道冷却
             if (laneChangeCooldown > 0) laneChangeCooldown--;
 
-            // 计算光标数据的相对位移（使用滤波后的值）
-            const deltaX = filtered_focus_x - last_cursor_x;
-            const deltaY = filtered_focus_y - last_cursor_y;
+            // ---- 陀螺仪噪声过滤 ----
+            // 1. 死区过滤：忽略微小抖动（传感器噪声）
+            const DEAD_ZONE_X = 2.0;  // 偏航角死区（度）
+            const DEAD_ZONE_Y = 3.0;  // 俯仰角死区（度）
             
-            // 设置阈值，只有当位移超过一定值时才认为是有意义的移动
-            const moveThreshold = 50;  // 左右移动阈值（像素）
-            const jumpThreshold = 80;  // 跳跃阈值（像素）
+            let rawGyroX = Math.abs(gyroscope_x) < DEAD_ZONE_X ? 0 : gyroscope_x;
+            let rawGyroY = Math.abs(gyroscope_y) < DEAD_ZONE_Y ? 0 : gyroscope_y;
             
-            // 水平方向移动（左右）- 基于 CursorX 相对位移，冷却期内不响应
-            if (laneChangeCooldown === 0 && Math.abs(deltaX) > moveThreshold) {
-                if (deltaX > 0 && currentLane < 1) {
-                    // 向右移动
+            // 2. 尖峰过滤：如果与上一帧差值过大（>30度），视为噪声尖峰，丢弃
+            const SPIKE_THRESHOLD = 30;
+            if (Math.abs(rawGyroX - last_gyroscope_x) > SPIKE_THRESHOLD) rawGyroX = last_gyroscope_x;
+            if (Math.abs(rawGyroY - last_gyroscope_y) > SPIKE_THRESHOLD) rawGyroY = last_gyroscope_y;
+            
+            // 3. EMA 低通滤波：平滑信号
+            filtered_gyro_x = GYRO_EMA_ALPHA_X * rawGyroX + (1 - GYRO_EMA_ALPHA_X) * filtered_gyro_x;
+            filtered_gyro_y = GYRO_EMA_ALPHA_Y * rawGyroY + (1 - GYRO_EMA_ALPHA_Y) * filtered_gyro_y;
+            
+            // 更新上一帧原始值
+            last_gyroscope_x = gyroscope_x;
+            last_gyroscope_y = gyroscope_y;
+
+            // ---- 左右移动（偏航角 GyroX）----
+            // 偏航角 > 阈值 → 右转（右移一道），< -阈值 → 左转（左移一道）
+            const LANE_THRESHOLD = 8;  // 触发换道的偏航角阈值（度）
+            
+            if (laneChangeCooldown === 0) {
+                if (filtered_gyro_x > LANE_THRESHOLD && currentLane < 1) {
                     currentLane++;
                     laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
-                } else if (deltaX < 0 && currentLane > -1) {
-                    // 向左移动
+                } else if (filtered_gyro_x < -LANE_THRESHOLD && currentLane > -1) {
                     currentLane--;
                     laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
                 }
             }
             
-            // 垂直方向移动（跳跃）- 基于 CursorY 相对位移
-            if (deltaY < -jumpThreshold) {
-                // 向上快速移动（跳跃）
+            // ---- 跳跃控制（俯仰角 GyroY）----
+            // 俯仰角向上（负值）超过阈值 → 跳跃
+            const JUMP_THRESHOLD = -10;  // 触发跳跃的俯仰角阈值（度，负值=抬头）
+            
+            if (filtered_gyro_y < JUMP_THRESHOLD) {
                 if (player.position.y <= 1.1) {
-                    gsap.to(player.position, { y: 3, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
+                    // 根据俯仰角幅度决定跳跃高度：角度越大跳得越高
+                    const jumpPower = Math.min(Math.abs(filtered_gyro_y) / 20, 1.0);  // 归一化到 0~1
+                    const jumpHeight = 2.0 + jumpPower * 2.0;  // 跳跃高度 2~4
+                    gsap.to(player.position, { y: jumpHeight, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
                 }
             }
-            
-            // 更新上一帧的数据（使用滤波后的值）
-            last_cursor_x = filtered_focus_x;
-            last_cursor_y = filtered_focus_y;
         }
 
         // 键盘控制逻辑
@@ -544,7 +687,9 @@
         
         // 碰撞处理：角色闪烁 + 提醒文字
         function onPlayerHit() {
-            hitCooldown = 60;  // 约1秒冷却（60fps）
+            hitCooldown = 60;
+            comboCount = 0;  // Combo 清零
+            updateComboDisplay();
             
             // 扣分惩罚：碰到箱子 -5 分，最低为 0
             score = Math.max(0, score - 5);
@@ -614,10 +759,10 @@
             void reminderEl.offsetWidth;
             reminderEl.classList.add('show');
             
-            // 动画结束后清除
+            // 动画结束后清除（与 CSS 动画时长 2.2s 对齐）
             setTimeout(() => {
                 reminderEl.classList.remove('show');
-            }, 2100);
+            }, 2300);
         }
 
         // 暂停/继续游戏
@@ -674,26 +819,26 @@
         function positionMontage() {
             const el = ensureMontageEl();
             const reminderEl = document.getElementById('reminder');
-            // If reminder is visible and showing, position montage to its right at same vertical center
+            // 标记是否使用内联定位模式（与提醒并排）
+            el._inlineMode = false;
             if (reminderEl && reminderEl.classList.contains('show')) {
                 const r = reminderEl.getBoundingClientRect();
                 const m = el.getBoundingClientRect();
                 const top = r.top + (r.height - m.height) / 2;
-                const left = r.right + 10; // 10px gap
+                const left = r.right + 10;
                 el.style.left = left + 'px';
                 el.style.top = top + 'px';
-                el.style.transform = 'translateX(0) translateY(0)';
+                el.style.transform = '';
+                el._inlineMode = true;
             } else {
-                // center horizontally at the same height as reminder (or middle of viewport if reminder not found)
-                let centerY = window.innerHeight * 0.32; // default 32%
+                let centerY = window.innerHeight * 0.32;
                 if (reminderEl) {
                     const r = reminderEl.getBoundingClientRect();
                     centerY = r.top + r.height / 2;
                 }
                 el.style.left = '50%';
                 el.style.top = centerY + 'px';
-                // 上移一个字体高度以满足用户要求（使用 CSS 变量，如果不可用回退到 28px）
-                el.style.transform = 'translateX(-50%) translateY(calc(-50% - var(--montage-font-size, 28px)))';
+                el.style.transform = '';
             }
         }
 
@@ -710,7 +855,6 @@
                 _lastScoreCount = 1;
             }
 
-            // 文本格式：
             el.classList.remove('pos', 'neg');
             el.classList.add(amount > 0 ? 'pos' : 'neg');
             const times = _lastScoreCount > 1 ? (' x' + _lastScoreCount) : '';
@@ -719,41 +863,208 @@
             // 重新定位（以便在提醒出现时靠右显示）
             positionMontage();
 
-            // show
-            requestAnimationFrame(() => el.classList.add('show'));
+            // 重启 CSS 动画（移除 → 强制回流 → 添加）
+            el.classList.remove('show', 'show-inline');
+            void el.offsetWidth;
+            requestAnimationFrame(() => el.classList.add(el._inlineMode ? 'show-inline' : 'show'));
 
             // 重置隐藏计时器（延长显示时间以体现连续次数）
             if (_montageHideTimer) clearTimeout(_montageHideTimer);
             _montageHideTimer = setTimeout(() => {
-                el.classList.remove('show');
-                // 清除连续计数（下一次将被视为新一次）
+                el.classList.remove('show', 'show-inline');
                 _lastScoreKey = null;
                 _lastScoreCount = 0;
                 _montageHideTimer = null;
-            }, 1200);
+            }, 1500);
         }
 
-        // 每秒根据 attention 值调整积分与速度
+        // ---- P0: 场景视觉随 attention 实时变化 ----
+        function _hexToRGB(hex) {
+            return { r: ((hex >> 16) & 0xff) / 255, g: ((hex >> 8) & 0xff) / 255, b: (hex & 0xff) / 255 };
+        }
+
+        function updateSceneVisuals(att) {
+            // 根据 attention 值确定目标主题
+            let target = SCENE_THEMES[SCENE_THEMES.length - 1];
+            for (const theme of SCENE_THEMES) {
+                if (att <= theme.max) { target = theme; break; }
+            }
+            const tBg = _hexToRGB(target.bg);
+            const tFog = _hexToRGB(target.fog);
+            const tGnd = _hexToRGB(target.ground);
+            const L = 0.025; // lerp 速度
+
+            // 场景背景 + 雾色平滑过渡
+            scene.background.r += (tBg.r - scene.background.r) * L;
+            scene.background.g += (tBg.g - scene.background.g) * L;
+            scene.background.b += (tBg.b - scene.background.b) * L;
+            scene.fog.color.r += (tFog.r - scene.fog.color.r) * L;
+            scene.fog.color.g += (tFog.g - scene.fog.color.g) * L;
+            scene.fog.color.b += (tFog.b - scene.fog.color.b) * L;
+
+            // 地面颜色
+            visualState.groundR += (tGnd.r - visualState.groundR) * L;
+            visualState.groundG += (tGnd.g - visualState.groundG) * L;
+            visualState.groundB += (tGnd.b - visualState.groundB) * L;
+            groundSegments.forEach(seg => {
+                seg.material.color.setRGB(visualState.groundR, visualState.groundG, visualState.groundB);
+            });
+
+            // Bloom 强度: 专注越高光芒越强
+            visualState.bloomStrength += (target.bloom - visualState.bloomStrength) * L;
+            bloomPass.strength = visualState.bloomStrength;
+
+            // 暗角: 专注越低暗角越重（压迫感）
+            visualState.vignetteDarkness += (target.vigDark - visualState.vignetteDarkness) * L;
+            vignettePass.uniforms["darkness"].value = visualState.vignetteDarkness;
+
+            // 雾效距离: 专注越高视野越远
+            visualState.fogNear += (target.fogNear - visualState.fogNear) * L;
+            visualState.fogFar += (target.fogFar - visualState.fogFar) * L;
+            scene.fog.near = visualState.fogNear;
+            scene.fog.far = visualState.fogFar;
+        }
+
+        function updatePlayerVisual(att) {
+            if (isFlashing) return;  // 闪烁动画期间不更新，避免颜色冲突
+            let tColor, tEmissive, tIntensity;
+            if (att >= 70) {
+                tColor = 0xffd700; tEmissive = 0xffd700; tIntensity = 1.2;
+            } else if (att >= 40) {
+                tColor = 0x40e0a0; tEmissive = 0x40e0a0; tIntensity = 0.8;
+            } else {
+                tColor = PLAYER_DEFAULT_COLOR; tEmissive = PLAYER_DEFAULT_EMISSIVE; tIntensity = 0.5;
+            }
+            player.material.color.lerp(new THREE.Color(tColor), 0.04);
+            player.material.emissive.lerp(new THREE.Color(tEmissive), 0.04);
+            player.material.emissiveIntensity += (tIntensity - player.material.emissiveIntensity) * 0.04;
+        }
+
+        // ---- P1: Combo 显示与里程碑 ----
+        function updateComboDisplay() {
+            const el = document.getElementById('combo-display');
+            if (comboCount >= COMBO_MIN) {
+                el.textContent = `🔥 Combo x${comboCount}`;
+                el.classList.add('show');
+            } else {
+                el.classList.remove('show');
+            }
+        }
+
+        function checkComboMilestone() {
+            if (comboCount === 3) showMilestone('🔥 COMBO x3', 'fire');
+            else if (comboCount === 5) showMilestone('⚡ COMBO x5!', 'gold');
+            else if (comboCount === 10) showMilestone('💎 COMBO x10!!', 'gold');
+            if (comboCount >= 3) {
+                const el = document.getElementById('combo-display');
+                el.classList.remove('pulse');
+                void el.offsetWidth;
+                el.classList.add('pulse');
+            }
+        }
+
+        function showMilestone(text, style) {
+            const el = document.getElementById('milestone');
+            el.textContent = text;
+            el.className = style;
+            void el.offsetWidth;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 2200);
+        }
+
+        // ---- P1: 奖励道具生成与收集 ----
+        function spawnReward() {
+            const att = focusValue;
+            const now = performance.now();
+            if (now - lastRewardSpawnTime < 3000) return;
+            let type = null;
+            if (att > 70 && Math.random() < 0.12) type = 'ring';
+            else if (att > 50 && Math.random() < 0.18) type = 'star';
+            if (!type) return;
+            lastRewardSpawnTime = now;
+            const lane = Math.floor(Math.random() * 3) - 1;
+            let mesh;
+            if (type === 'star') {
+                mesh = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(0.35, 0),
+                    new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0xffd700, emissiveIntensity: 0.8 })
+                );
+                mesh.position.set(lane * 3, 1.5, player.position.z - 50);
+            } else {
+                mesh = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.5, 0.12, 8, 16),
+                    new THREE.MeshLambertMaterial({ color: 0xff69b4, emissive: 0xff1493, emissiveIntensity: 1.0 })
+                );
+                mesh.position.set(lane * 3, 1.2, player.position.z - 50);
+                mesh.rotation.x = Math.PI / 2;
+            }
+            mesh._rewardType = type;
+            mesh._collected = false;
+            scene.add(mesh);
+            rewardItems.push(mesh);
+        }
+
+        function updateRewardItems() {
+            spawnReward();
+            for (let i = rewardItems.length - 1; i >= 0; i--) {
+                const item = rewardItems[i];
+                // 旋转动画
+                item.rotation.y += 0.04;
+                item.rotation.z += (item._rewardType === 'ring' ? 0.02 : 0);
+                // 浮动
+                item.position.y += Math.sin(performance.now() * 0.003 + i) * 0.005;
+                const dz = item.position.z - player.position.z;
+                const dx = item.position.x - player.position.x;
+                const dy = item.position.y - player.position.y;
+                // 收集检测
+                if (!item._collected && Math.abs(dz) < 1.2 && Math.abs(dx) < 1.2 && Math.abs(dy) < 1.5) {
+                    item._collected = true;
+                    if (item._rewardType === 'star') {
+                        const pts = Math.round(10 * scoreBuffMultiplier);
+                        score += pts;
+                        showScoreChange(pts);
+                        showMilestone('⭐ +10', 'gold');
+                    } else {
+                        scoreBuffMultiplier = 2.0;
+                        scoreBuffEndTime = performance.now() + 5000;
+                        showMilestone('🌈 2X BUFF!', 'gold');
+                    }
+                    gsap.to(item.scale, { x: 2, y: 2, z: 2, duration: 0.2, ease: 'power2.out' });
+                    gsap.to(item.material, { opacity: 0, transparent: true, duration: 0.3, onComplete: () => {
+                        scene.remove(item);
+                        disposeMesh(item);
+                    }});
+                }
+                // 清理远处道具
+                if (dz > 15 || item._collected) {
+                    rewardItems.splice(i, 1);
+                    if (!item._collected) { scene.remove(item); disposeMesh(item); }
+                }
+            }
+        }
+
+        // ---- 积分与速度：五档连续化 ----
         function applyAttnEffects() {
             const att = Math.min(100, Math.max(0, attention_value));
+            let scoreDelta;
             if (att < 10) {
-                // attention < 10: 每次 -1（但不得低于0），速度变慢
-                if (score > 0) {
-                    score = Math.max(0, score - 1);
-                    showScoreChange(-1);
-                }
-                speedMultiplier = 0.6;
-            } else if (att <= 30) {
-                // attention 10~30: +1，速度正常
-                score = Math.max(0, score + 1);
-                showScoreChange(1);
-                speedMultiplier = 1.0;
+                scoreDelta = -1;
+            } else if (att < 30) {
+                scoreDelta = 1;
+            } else if (att < 50) {
+                scoreDelta = 3;
+            } else if (att < 70) {
+                scoreDelta = 5;
             } else {
-                // attention >30: +5，速度加快
-                score = Math.max(0, score + 5);
-                showScoreChange(5);
-                speedMultiplier = 1.4;
+                scoreDelta = 8;
             }
+            // combo 倍率叠加
+            const comboMul = 1 + Math.max(0, comboCount - 1) * 0.5;
+            scoreDelta = Math.round(scoreDelta * comboMul * scoreBuffMultiplier);
+            score = Math.max(0, score + scoreDelta);
+            if (scoreDelta !== 0) showScoreChange(scoreDelta);
+            // 速度平滑曲线: att=0→0.5x, att=50→1.0x, att=100→1.6x
+            speedMultiplier = 0.5 + (att / 100) * 1.1;
         }
 
         init();
