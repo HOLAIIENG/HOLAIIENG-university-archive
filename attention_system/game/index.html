@@ -168,7 +168,7 @@
         <div>GyroY(pitch): <span id="cursor-y">0.00</span></div>
     </div>
     <div id="reminder"></div>
-    <div class="controls">陀螺仪控制：偏头左右移动 | 抬头跳跃 | 键盘 ← → Space P 仍可用</div>
+    <div class="controls" id="controls-hint">陀螺仪校准中，请保持设备静止不动...  |  键盘 ← → Space P 可用</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -219,9 +219,15 @@
         const GYRO_EMA_ALPHA_X = 0.25;  // 偏航角滤波：较平滑，避免抖动换道
         const GYRO_EMA_ALPHA_Y = 0.45;  // 俯仰角滤波：适中，兼顾响应与稳定
         
-        // 上一帧的陀螺仪数据，用于计算变化量
-        let last_gyroscope_x = 0;
-        let last_gyroscope_y = 0;
+
+        // 陀螺仪基线校准：记录设备初始朝向，用偏移量做控制
+        let gyroBaselineX = 0;
+        let gyroBaselineY = 0;
+        let gyroBaselineSumX = 0;
+        let gyroBaselineSumY = 0;
+        let gyroCalibFrames = 0;
+        const GYRO_CALIB_COUNT = 60;  // 前 60 帧（约 1 秒）用于校准基线
+        let gyroCalibrated = false;
         
         // 上一帧的光标数据，用于计算相对位移
         let last_cursor_x = 0;
@@ -597,30 +603,47 @@
             // 减少换道冷却
             if (laneChangeCooldown > 0) laneChangeCooldown--;
 
-            // ---- 陀螺仪噪声过滤 ----
-            // 1. 死区过滤：忽略微小抖动（传感器噪声）
-            const DEAD_ZONE_X = 2.0;  // 偏航角死区（度）
-            const DEAD_ZONE_Y = 3.0;  // 俯仰角死区（度）
-            
-            let rawGyroX = Math.abs(gyroscope_x) < DEAD_ZONE_X ? 0 : gyroscope_x;
-            let rawGyroY = Math.abs(gyroscope_y) < DEAD_ZONE_Y ? 0 : gyroscope_y;
-            
-            // 2. 尖峰过滤：如果与上一帧差值过大（>30度），视为噪声尖峰，丢弃
-            const SPIKE_THRESHOLD = 30;
-            if (Math.abs(rawGyroX - last_gyroscope_x) > SPIKE_THRESHOLD) rawGyroX = last_gyroscope_x;
-            if (Math.abs(rawGyroY - last_gyroscope_y) > SPIKE_THRESHOLD) rawGyroY = last_gyroscope_y;
-            
-            // 3. EMA 低通滤波：平滑信号
-            filtered_gyro_x = GYRO_EMA_ALPHA_X * rawGyroX + (1 - GYRO_EMA_ALPHA_X) * filtered_gyro_x;
-            filtered_gyro_y = GYRO_EMA_ALPHA_Y * rawGyroY + (1 - GYRO_EMA_ALPHA_Y) * filtered_gyro_y;
-            
-            // 更新上一帧原始值
-            last_gyroscope_x = gyroscope_x;
-            last_gyroscope_y = gyroscope_y;
+            // ---- 基线校准：前 N 帧采集平均朝向作为"正视前方"的基准 ----
+            if (!gyroCalibrated) {
+                gyroBaselineSumX += gyroscope_x;
+                gyroBaselineSumY += gyroscope_y;
+                gyroCalibFrames++;
+                if (gyroCalibFrames >= GYRO_CALIB_COUNT) {
+                    gyroBaselineX = gyroBaselineSumX / GYRO_CALIB_COUNT;
+                    gyroBaselineY = gyroBaselineSumY / GYRO_CALIB_COUNT;
+                    gyroCalibrated = true;
+                    console.log(`[陀螺仪校准完成] 基线 Yaw=${gyroBaselineX.toFixed(1)}°  Pitch=${gyroBaselineY.toFixed(1)}°`);
+                    const hint = document.getElementById('controls-hint');
+                    if (hint) hint.textContent = '陀螺仪控制：偏头左右移动 | 抬头跳跃 | 键盘 ← → Space P 仍可用';
+                }
+                filtered_gyro_x = 0;
+                filtered_gyro_y = 0;
+                return;
+            }
 
-            // ---- 左右移动（偏航角 GyroX）----
-            // 偏航角 > 阈值 → 右转（右移一道），< -阈值 → 左转（左移一道）
-            const LANE_THRESHOLD = 8;  // 触发换道的偏航角阈值（度）
+            // ---- 计算相对基线的偏移量（这才是真正的用户转头/抬头信号）----
+            const rawOffsetX = gyroscope_x - gyroBaselineX;
+            const rawOffsetY = gyroscope_y - gyroBaselineY;
+
+            // ---- 噪声过滤（仅对偏移量）----
+            // 1. 死区过滤：偏移量很小时视为静止
+            const DEAD_ZONE_X = 1.5;
+            const DEAD_ZONE_Y = 2.0;
+            let cleanX = Math.abs(rawOffsetX) < DEAD_ZONE_X ? 0 : rawOffsetX;
+            let cleanY = Math.abs(rawOffsetY) < DEAD_ZONE_Y ? 0 : rawOffsetY;
+
+            // 2. 尖峰过滤：偏移量的帧间突变（>15°）视为噪声
+            const SPIKE_THRESHOLD = 15;
+            if (Math.abs(cleanX - filtered_gyro_x) > SPIKE_THRESHOLD) cleanX = filtered_gyro_x;
+            if (Math.abs(cleanY - filtered_gyro_y) > SPIKE_THRESHOLD) cleanY = filtered_gyro_y;
+
+            // 3. EMA 低通滤波：平滑信号
+            filtered_gyro_x = GYRO_EMA_ALPHA_X * cleanX + (1 - GYRO_EMA_ALPHA_X) * filtered_gyro_x;
+            filtered_gyro_y = GYRO_EMA_ALPHA_Y * cleanY + (1 - GYRO_EMA_ALPHA_Y) * filtered_gyro_y;
+
+            // ---- 左右移动（偏航角偏移量）----
+            // 偏头右转（偏移量为正）→ 右移一道，偏头左转（偏移量为负）→ 左移一道
+            const LANE_THRESHOLD = 8;  // 触发换道的偏移角度（度）
             
             if (laneChangeCooldown === 0) {
                 if (filtered_gyro_x > LANE_THRESHOLD && currentLane < 1) {
@@ -632,13 +655,13 @@
                 }
             }
             
-            // ---- 跳跃控制（俯仰角 GyroY）----
-            // 俯仰角向上（负值）超过阈值 → 跳跃
-            const JUMP_THRESHOLD = -10;  // 触发跳跃的俯仰角阈值（度，负值=抬头）
+            // ---- 跳跃控制（俯仰角偏移量）----
+            // 抬头（pitch 减小，偏移量为负）→ 跳跃
+            const JUMP_THRESHOLD = -10;  // 触发跳跃的俯仰偏移角度（度，负值=抬头）
             
             if (filtered_gyro_y < JUMP_THRESHOLD) {
                 if (player.position.y <= 1.1) {
-                    // 根据俯仰角幅度决定跳跃高度：角度越大跳得越高
+                    // 根据偏移幅度决定跳跃高度：角度越大跳得越高
                     const jumpPower = Math.min(Math.abs(filtered_gyro_y) / 20, 1.0);  // 归一化到 0~1
                     const jumpHeight = 2.0 + jumpPower * 2.0;  // 跳跃高度 2~4
                     gsap.to(player.position, { y: jumpHeight, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
