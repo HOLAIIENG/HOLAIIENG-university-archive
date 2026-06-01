@@ -16,6 +16,7 @@
             margin-top: 15px; border-radius: 10px; overflow: hidden;
             border: 2px solid rgba(255,255,255,0.3);
             box-shadow: 0 0 15px rgba(0,242,255,0.3);
+            transition: box-shadow 0.5s ease;
         }
         #attn-bar {
             width: 30%; height: 100%;
@@ -159,10 +160,12 @@
         let ws = null;
         const WS_URL = 'ws://localhost:8765';
 
+        // 天空球引用（用于动态更新）
+        let skyMesh = null;
+
         function init() {
-            // 场景初始化 [cite: 19]
+            // 场景初始化
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xd8b5ff);
             scene.fog = new THREE.Fog(0xd8b5ff, 10, 60);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
@@ -171,7 +174,10 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            // 角色与环境 [cite: 36, 38]
+            // 创建天空球
+            createSky();
+
+            // 角色与环境
             player = new THREE.Mesh(
                 new THREE.CapsuleGeometry(0.4, 0.8, 4, 16),
                 new THREE.MeshLambertMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.5 })
@@ -180,10 +186,13 @@
             scene.add(player);
 
             // 使用可扩展的地面与轨道段（实现无限延伸，随相机生成/销毁）
-            // ... 初始化时不一次性创建长平面，而是由下面的 initInfiniteGroundAndLanes 管理
             initInfiniteGroundAndLanes();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            // 添加平行光增强方块地面的立体感
+            const dirLight = new THREE.DirectionalLight(0xffeedd, 0.6);
+            dirLight.position.set(5, 15, 10);
+            scene.add(dirLight);
 
             // 后期处理初始化 (关键修复点：使用全局 THREE 访问) [cite: 13, 39]
             composer = new THREE.EffectComposer(renderer);
@@ -239,6 +248,55 @@
             } catch (e) { /* ignore */ }
         }
 
+        // ---------- 天空球系统 ----------
+        function createSky() {
+            const skyGeo = new THREE.SphereGeometry(400, 32, 32);
+            const skyMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor:    { value: new THREE.Color(0x1a0533) },
+                    midColor:    { value: new THREE.Color(0xd8b5ff) },
+                    bottomColor: { value: new THREE.Color(0xffd1dc) },
+                    sunColor:    { value: new THREE.Color(0xffaa66) },
+                    sunY:        { value: 0.15 },
+                    offset:      { value: 20 },
+                    exponent:    { value: 0.6 }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPos.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 midColor;
+                    uniform vec3 bottomColor;
+                    uniform vec3 sunColor;
+                    uniform float sunY;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition + offset).y;
+                        float tBottom = pow(max(h, 0.0), 0.4);
+                        vec3 col = mix(bottomColor, midColor, clamp(tBottom * 2.0, 0.0, 1.0));
+                        float tTop = pow(max(h - 0.3, 0.0), exponent);
+                        col = mix(col, topColor, clamp(tTop, 0.0, 1.0));
+                        float sunDist = abs(h - sunY);
+                        float sunGlow = exp(-sunDist * 8.0) * 0.6;
+                        col += sunColor * sunGlow;
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `,
+                side: THREE.BackSide,
+                depthWrite: false
+            });
+            skyMesh = new THREE.Mesh(skyGeo, skyMat);
+            scene.add(skyMesh);
+        }
+
         function spawnObstacle() {
             const lane = Math.floor(Math.random() * 3) - 1;
             const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
@@ -273,22 +331,102 @@
             }
         }
 
+        // 方块地面参数（等比例放大2倍）
+        const BLOCK_SIZE = 4;
+        const BLOCK_GAP = 0.3;
+        const BLOCK_HEIGHT_MIN = 0.2;
+        const BLOCK_HEIGHT_MAX = 1.0;
+        const GROUND_WIDTH = 60;
+        // 三条轨道的 X 坐标（这些列保留完整方块）
+        const LANE_X_POSITIONS = [-3, 0, 3];
+        // 方块地面颜色调色板（梦核风格）
+        const BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc];
+
         function createGroundSegment(centerZ) {
-            const geo = new THREE.PlaneGeometry(60, segmentLength);
-            const mat = new THREE.MeshLambertMaterial({ color: 0xffd1dc });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.rotation.x = -Math.PI / 2;
-            mesh.position.z = centerZ;
-            scene.add(mesh);
-            return mesh;
+            // 使用 InstancedMesh 批量渲染方块地面
+            const group = new THREE.Group();
+            group.position.z = centerZ;
+
+            const halfLen = segmentLength / 2;
+            const halfWidth = GROUND_WIDTH / 2;
+            const colsX = Math.ceil(GROUND_WIDTH / BLOCK_SIZE);
+            const colsZ = Math.ceil(segmentLength / BLOCK_SIZE);
+            // 最大方块数（实际可能更少，因为零散区域有空位）
+            const maxBlockCount = colsX * colsZ;
+
+            const baseMat = new THREE.MeshLambertMaterial({ color: 0xffd1dc });
+            const tempGeo = new THREE.BoxGeometry(BLOCK_SIZE - BLOCK_GAP, 1, BLOCK_SIZE - BLOCK_GAP);
+            const instancedMesh = new THREE.InstancedMesh(tempGeo, baseMat, maxBlockCount);
+
+            const dummy = new THREE.Object3D();
+            const color = new THREE.Color();
+            let idx = 0;
+
+            for (let xi = 0; xi < colsX; xi++) {
+                const blockCenterX = -halfWidth + xi * BLOCK_SIZE + BLOCK_SIZE / 2;
+
+                // 判断该列是否包含轨道（方块左边 <= 轨道中心 <= 方块右边）
+                let isLaneColumn = false;
+                for (const laneX of LANE_X_POSITIONS) {
+                    if (Math.abs(blockCenterX - laneX) <= BLOCK_SIZE / 2) {
+                        isLaneColumn = true;
+                        break;
+                    }
+                }
+
+                for (let zi = 0; zi < colsZ; zi++) {
+                    const z = -halfLen + zi * BLOCK_SIZE + BLOCK_SIZE / 2;
+                    let finalH;
+                    let placeBlock = true;
+
+                    if (isLaneColumn) {
+                        // 轨道列：完整方块，固定高度
+                        finalH = BLOCK_HEIGHT_MAX;
+                    } else {
+                        // 非轨道列：零散显示（约 35% 概率放置）
+                        if (Math.random() > 0.35) {
+                            placeBlock = false;
+                        } else {
+                            // 零散方块高度随机变化较大，有些很低形成错落感
+                            finalH = BLOCK_HEIGHT_MIN + Math.random() * (BLOCK_HEIGHT_MAX - BLOCK_HEIGHT_MIN) * 0.6;
+                        }
+                    }
+
+                    if (placeBlock) {
+                        dummy.position.set(blockCenterX, -finalH / 2, z);
+                        dummy.scale.set(1, finalH, 1);
+                        dummy.updateMatrix();
+                        instancedMesh.setMatrixAt(idx, dummy.matrix);
+
+                        // 调色板随机色差
+                        const baseColor = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+                        color.setHex(baseColor);
+                        color.r += (Math.random() - 0.5) * 0.04;
+                        color.g += (Math.random() - 0.5) * 0.04;
+                        color.b += (Math.random() - 0.5) * 0.04;
+                        instancedMesh.setColorAt(idx, color);
+
+                        idx++;
+                    }
+                }
+            }
+
+            instancedMesh.count = idx;
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+
+            group.add(instancedMesh);
+            scene.add(group);
+            group._instancedMesh = instancedMesh;
+            return group;
         }
 
         function createLaneSegment(laneX, centerZ) {
             // 用线段表示轨道：几何在本地坐标系中以段中心为原点，使用 line.position 设置全局位置
             const half = segmentLength / 2;
             const pts = [
-                new THREE.Vector3(0, 0.01, -half),
-                new THREE.Vector3(0, 0.01, half)
+                new THREE.Vector3(0, 0.08, -half),
+                new THREE.Vector3(0, 0.08, half)
             ];
             const g = new THREE.BufferGeometry().setFromPoints(pts);
             const m = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 });
@@ -300,6 +438,16 @@
 
         function disposeMesh(mesh) {
             try {
+                // 支持 Group（方块地面段）递归清理
+                if (mesh.isGroup || (mesh.children && mesh.children.length > 0)) {
+                    mesh.children.forEach(child => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) child.material.forEach(mat => mat.dispose());
+                            else child.material.dispose();
+                        }
+                    });
+                }
                 if (mesh.geometry) mesh.geometry.dispose();
                 if (mesh.material) {
                     if (Array.isArray(mesh.material)) mesh.material.forEach(mat => mat.dispose());
@@ -426,6 +574,11 @@
             camera.position.lerp(new THREE.Vector3(player.position.x * 0.5, 5, player.position.z + 10), 0.05);
             camera.lookAt(player.position.x, 0, player.position.z - 5);
 
+            // 天空球跟随相机（始终保持包裹）
+            if (skyMesh) {
+                skyMesh.position.copy(camera.position);
+            }
+
             // 更新并维护无限地面与轨道（使用已更新的 camera.position）
             updateInfiniteGroundAndLanes();
 
@@ -441,6 +594,18 @@
             // 实时显示 attention（顶部），保留右侧 attn 精确值
             document.getElementById('attn-top').innerText = Math.round(attention_value);
             document.getElementById('attn-bar').style.width = Math.min(100, Math.max(0, attention_value)) + '%';
+
+            // 能量条边框光晕随注意力变化
+            const barContainer = document.querySelector('.energy-bar-container');
+            if (barContainer) {
+                if (attention_value > 70) {
+                    barContainer.style.boxShadow = '0 0 25px rgba(0,255,136,0.6)';
+                } else if (attention_value > 30) {
+                    barContainer.style.boxShadow = '0 0 15px rgba(255,217,61,0.4)';
+                } else {
+                    barContainer.style.boxShadow = '0 0 10px rgba(255,50,50,0.3)';
+                }
+            }
 
             // 更新隐蔽的算法数据显示
             document.getElementById('gyro-x').innerText = gyroscope_x.toFixed(2);
@@ -732,6 +897,46 @@
             }, 1200);
         }
 
+        // 根据注意力值更新场景视觉效果
+        function updateSceneVisuals(att) {
+            const t = att / 100;
+
+            // 天空颜色联动
+            if (skyMesh) {
+                const u = skyMesh.material.uniforms;
+                u.topColor.value.setHSL(0.75, THREE.MathUtils.lerp(0.2, 0.6, t), THREE.MathUtils.lerp(0.05, 0.25, t));
+                u.midColor.value.setHSL(0.78, THREE.MathUtils.lerp(0.2, 0.5, t), THREE.MathUtils.lerp(0.3, 0.7, t));
+                u.bottomColor.value.setHSL(
+                    THREE.MathUtils.lerp(0.0, 0.95, t),
+                    THREE.MathUtils.lerp(0.2, 0.4, t),
+                    THREE.MathUtils.lerp(0.3, 0.8, t)
+                );
+                u.sunY.value = THREE.MathUtils.lerp(0.05, 0.25, t);
+                u.sunColor.value.setHSL(
+                    THREE.MathUtils.lerp(0.05, 0.12, t),
+                    THREE.MathUtils.lerp(0.5, 0.8, t),
+                    THREE.MathUtils.lerp(0.3, 0.7, t)
+                );
+            }
+
+            // 雾色渐变
+            const fogColor = new THREE.Color().setHSL(0.78, THREE.MathUtils.lerp(0.1, 0.4, t), THREE.MathUtils.lerp(0.3, 0.7, t));
+            scene.fog.color = fogColor;
+            scene.fog.near = THREE.MathUtils.lerp(5, 20, t);
+            scene.fog.far  = THREE.MathUtils.lerp(30, 80, t);
+
+            // Bloom 强度
+            if (composer && composer.passes && composer.passes[1]) {
+                composer.passes[1].strength = THREE.MathUtils.lerp(0.4, 1.8, t);
+            }
+
+            // 暗角程度
+            if (composer && composer.passes && composer.passes[2]) {
+                composer.passes[2].uniforms["darkness"].value = THREE.MathUtils.lerp(2.5, 0.8, t);
+                composer.passes[2].uniforms["offset"].value   = THREE.MathUtils.lerp(0.6, 1.2, t);
+            }
+        }
+
         // 每秒根据 attention 值调整积分与速度
         function applyAttnEffects() {
             const att = Math.min(100, Math.max(0, attention_value));
@@ -753,6 +958,9 @@
                 showScoreChange(5);
                 speedMultiplier = 1.4;
             }
+
+            // 根据注意力动态调整环境视觉
+            updateSceneVisuals(att);
         }
 
         init();
