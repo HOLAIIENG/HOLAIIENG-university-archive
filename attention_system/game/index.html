@@ -176,7 +176,7 @@
                 new THREE.CapsuleGeometry(0.4, 0.8, 4, 16),
                 new THREE.MeshLambertMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.5 })
             );
-            player.position.y = 1;
+            player.position.set(0, 1, 0);
             scene.add(player);
 
             // 使用可扩展的地面与轨道段（实现无限延伸，随相机生成/销毁）
@@ -209,10 +209,6 @@
             try {
                 ws = new WebSocket(WS_URL);
                 
-                ws.onopen = function() {
-                    console.log('[WebSocket] 已连接到服务器');
-                };
-                
                 ws.onmessage = function(event) {
                     try {
                         const data = JSON.parse(event.data);
@@ -238,12 +234,9 @@
                 };
                 
                 ws.onclose = function() {
-                    console.log('[WebSocket] 连接已关闭，5秒后重连...');
                     setTimeout(initWebSocket, 5000);
                 };
-            } catch (e) {
-                console.error('[WebSocket] 连接失败:', e);
-            }
+            } catch (e) { /* ignore */ }
         }
 
         function spawnObstacle() {
@@ -462,45 +455,56 @@
 
         // 换道冷却帧数，防止一次跨两轨
         let laneChangeCooldown = 0;
-        const LANE_CHANGE_COOLDOWN_FRAMES = 45;  // 约0.25秒冷却
+        const LANE_CHANGE_COOLDOWN_FRAMES = 45;  // 约0.75秒冷却
+        
+        // 陀螺仪基准值和阈值
+        const GYRO_Y_BASELINE = 270;  // GyroY 基准值（面向屏幕时）
+        const GYRO_Y_JUMP_THRESHOLD = 260;  // GyroY 减小到此值触发跳跃
+        const GYRO_Z_BASELINE = 170;  // GyroZ 基准值
+        const GYRO_Z_LEFT_THRESHOLD = 180;  // GyroZ 增大到此值左移
+        const GYRO_Z_RIGHT_THRESHOLD = 160;  // GyroZ 减小到此值右移
+        
+        // 上一帧的陀螺仪数据，用于检测变化
+        let last_gyro_y_for_jump = GYRO_Y_BASELINE;
+        let last_gyro_z_for_lane = GYRO_Z_BASELINE;
 
-        // 根据光标数据更新角色位置
+        // 根据陀螺仪数据更新角色位置
         function updatePlayerPositionFromGyro() {
+            // WebSocket 未连接时，不使用陀螺仪控制轨道
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            
             // 减少换道冷却
             if (laneChangeCooldown > 0) laneChangeCooldown--;
-
-            // 计算光标数据的相对位移（使用滤波后的值）
-            const deltaX = filtered_focus_x - last_cursor_x;
-            const deltaY = filtered_focus_y - last_cursor_y;
             
-            // 设置阈值，只有当位移超过一定值时才认为是有意义的移动
-            const moveThreshold = 50;  // 左右移动阈值（像素）
-            const jumpThreshold = 80;  // 跳跃阈值（像素）
-            
-            // 水平方向移动（左右）- 基于 CursorX 相对位移，冷却期内不响应
-            if (laneChangeCooldown === 0 && Math.abs(deltaX) > moveThreshold) {
-                if (deltaX > 0 && currentLane < 1) {
-                    // 向右移动
-                    currentLane++;
-                    laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
-                } else if (deltaX < 0 && currentLane > -1) {
-                    // 向左移动
-                    currentLane--;
-                    laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
-                }
-            }
-            
-            // 垂直方向移动（跳跃）- 基于 CursorY 相对位移
-            if (deltaY < -jumpThreshold) {
-                // 向上快速移动（跳跃）
+            // GyroY 控制跳跃：值减小到阈值以下触发跳跃
+            if (gyroscope_y < GYRO_Y_JUMP_THRESHOLD && last_gyro_y_for_jump >= GYRO_Y_JUMP_THRESHOLD) {
+                // 检测到 GyroY 向下跨越阈值，触发跳跃
                 if (player.position.y <= 1.1) {
                     gsap.to(player.position, { y: 3, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
                 }
             }
             
-            // 更新上一帧的数据（使用滤波后的值）
-            last_cursor_x = filtered_focus_x;
-            last_cursor_y = filtered_focus_y;
+            // GyroZ 控制左右轨道切换
+            if (laneChangeCooldown === 0) {
+                // 向左移动：GyroZ 增大到阈值以上
+                if (gyroscope_z > GYRO_Z_LEFT_THRESHOLD && last_gyro_z_for_lane <= GYRO_Z_LEFT_THRESHOLD) {
+                    if (currentLane > -1) {
+                        currentLane--;
+                        laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
+                    }
+                }
+                // 向右移动：GyroZ 减小到阈值以下
+                else if (gyroscope_z < GYRO_Z_RIGHT_THRESHOLD && last_gyro_z_for_lane >= GYRO_Z_RIGHT_THRESHOLD) {
+                    if (currentLane < 1) {
+                        currentLane++;
+                        laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES;
+                    }
+                }
+            }
+            
+            // 更新上一帧的陀螺仪数据
+            last_gyro_y_for_jump = gyroscope_y;
+            last_gyro_z_for_lane = gyroscope_z;
         }
 
         // 键盘控制逻辑
@@ -623,11 +627,6 @@
         // 暂停/继续游戏
         function togglePause() {
             isPaused = !isPaused;
-            if (isPaused) {
-                console.log('游戏已暂停');
-            } else {
-                console.log('游戏已继续');
-            }
         }
 
         // 更新算法数据的函数
