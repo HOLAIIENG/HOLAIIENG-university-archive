@@ -125,6 +125,9 @@
         let lastAttnTick = performance.now();
         const attnTickInterval = 1000; // 毫秒：每秒根据 attention 更新积分和速度
         let speedMultiplier = 1.0; // 根据 attention 调整移动速度
+        // 障碍物生成时序控制
+        let lastObstacleTime = 0;
+        const OBSTACLE_INTERVAL = 1500;
 
         // 算法数据变量
         let gyroscope_x = 0;
@@ -206,7 +209,7 @@
             vignettePass.uniforms["darkness"].value = 1.8;
             composer.addPass(vignettePass);
 
-            setInterval(spawnObstacle, 1500);
+
             
             // 初始化WebSocket连接
             initWebSocket();
@@ -301,13 +304,19 @@
             // 生成 -1/0/1 三个索引对应三条轨道；与 LANE_X_POSITIONS 对应的实际 X 为 index * BLOCK_SIZE
             const lane = Math.floor(Math.random() * 3) - 1;
             const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
-            // 使用与轨道间距一致的固定值（4），避免在函数定义顺序上依赖常量提升
-            obs.position.set(lane * 4, 0.6, player.position.z - 60);
+            // 初始位置在下方，与地板一起从下方浮上来
+            obs.position.set(lane * 4, -5.4, player.position.z - 60);
             scene.add(obs);
             // 标记用于得分/碰撞判断
             obs._scored = false;
             obs._jumped = false;
             obstacles.push(obs);
+            // 从下方升起到目标位置（与地板水波浪动画节奏一致）
+            gsap.to(obs.position, {
+                y: 0.6,
+                duration: 1.2,
+                ease: "power2.out"
+            });
         }
 
         // ---------- 无限地面与轨道系统 ----------
@@ -315,8 +324,8 @@
         // laneSegments 的 key 使用实际 X 值字符串以便清理时对应
         const laneSegments = { '-4': [], '0': [], '4': [] };
         const segmentLength = 40; // 每段长度（z方向）
-        const aheadRange = 240; // 相机向前需要的范围
-        const behindRange = 120; // 相机向后的保留范围
+        const aheadRange = 60; // 相机向前需要的范围（调近以优化近场动画效果）
+        const behindRange = 40; // 相机向后的保留范围
 
         function initInfiniteGroundAndLanes() {
             // 初始化时填充足够的段以覆盖相机前后范围
@@ -325,7 +334,7 @@
             const maxZ = cameraZ + behindRange;
             for (let z = Math.floor(minZ / segmentLength) * segmentLength; z <= maxZ; z += segmentLength) {
                 const centerZ = z;
-                const g = createGroundSegment(centerZ);
+                const g = createGroundSegment(centerZ, false);
                 groundSegments.push(g);
                 ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), centerZ);
@@ -346,7 +355,7 @@
         // 方块地面颜色调色板（梦核风格）
         const BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc];
 
-        function createGroundSegment(centerZ) {
+        function createGroundSegment(centerZ, animateIn = false) {
             // 使用 InstancedMesh 批量渲染方块地面
             const group = new THREE.Group();
             group.position.z = centerZ;
@@ -365,6 +374,8 @@
             const dummy = new THREE.Object3D();
             const color = new THREE.Color();
             let idx = 0;
+            // 保存每个方块的初始数据用于水波浪动画
+            const blockData = [];
 
             for (let xi = 0; xi < colsX; xi++) {
                 const blockCenterX = -halfWidth + xi * BLOCK_SIZE + BLOCK_SIZE / 2;
@@ -397,7 +408,17 @@
                     }
 
                     if (placeBlock) {
-                        dummy.position.set(blockCenterX, -finalH / 2, z);
+                        // 保存数据用于水波浪动画
+                        blockData.push({
+                            x: blockCenterX,
+                            y: -finalH / 2,
+                            z: z,
+                            h: finalH,
+                            idx: idx
+                        });
+
+                        const initialYOffset = animateIn ? -6 : 0;
+                        dummy.position.set(blockCenterX, -finalH / 2 + initialYOffset, z);
                         dummy.scale.set(1, finalH, 1);
                         dummy.updateMatrix();
                         instancedMesh.setMatrixAt(idx, dummy.matrix);
@@ -422,6 +443,72 @@
             group.add(instancedMesh);
             scene.add(group);
             group._instancedMesh = instancedMesh;
+
+            // 水波浪入场动画
+            if (animateIn && blockData.length > 0) {
+                group._animateIn = function() {
+                    // 与地板段同步生成障碍物（基于时间间隔控制密度）
+                    const _now = performance.now();
+                    if (_now - lastObstacleTime >= OBSTACLE_INTERVAL) {
+                        const lane = Math.floor(Math.random() * 3) - 1;
+                        const obs = new THREE.Mesh(
+                            new THREE.BoxGeometry(1.2, 1.2, 1.2),
+                            new THREE.MeshLambertMaterial({ color: 0xffb6c1 })
+                        );
+                        // z 在该段范围内随机偏移，避免都在同一位置
+                        const zOffset = (Math.random() - 0.5) * (segmentLength - 8);
+                        obs.position.set(lane * 4, -5.4, centerZ + zOffset);
+                        scene.add(obs);
+                        obs._scored = false;
+                        obs._jumped = false;
+                        obstacles.push(obs);
+                        // 与地板同步从下方升起
+                        gsap.to(obs.position, {
+                            y: 0.6,
+                            duration: 1.2,
+                            ease: "power2.out"
+                        });
+                        lastObstacleTime = _now;
+                    }
+
+                    const dummy = new THREE.Object3D();
+                    const startY = -6;
+                    const riseHeight = 3;
+                    const duration = 1.2;
+
+                    const animObj = { progress: 0 };
+                    gsap.to(animObj, {
+                        progress: 1,
+                        duration: duration,
+                        ease: "power2.out",
+                        onUpdate: () => {
+                            const p = animObj.progress;
+                            blockData.forEach(data => {
+                                // 基于 z 位置的波浪延迟：近端（z 大）先开始，远端（z 小）后开始
+                                const zRatio = (data.z + halfLen) / segmentLength;
+                                const delay = (1 - zRatio) * 0.5;
+
+                                let localP = (p - delay) / (1 - delay);
+                                if (localP < 0) localP = 0;
+                                if (localP > 1) localP = 1;
+
+                                // ease-out cubic
+                                const easeP = 1 - Math.pow(1 - localP, 3);
+
+                                // 从底部缓缓升起，过冲，再落到目标位置
+                                const yOffset = startY * (1 - easeP) + riseHeight * Math.sin(easeP * Math.PI);
+
+                                dummy.position.set(data.x, data.y + yOffset, data.z);
+                                dummy.scale.set(1, data.h, 1);
+                                dummy.updateMatrix();
+                                instancedMesh.setMatrixAt(data.idx, dummy.matrix);
+                            });
+                            instancedMesh.instanceMatrix.needsUpdate = true;
+                        }
+                    });
+                };
+            }
+
             return group;
         }
 
@@ -500,8 +587,9 @@
 
             // 在前方（更小 z 值）补充段，直到覆盖 minZ
             for (let z = currentMin - segmentLength; z >= minZ; z -= segmentLength) {
-                const g = createGroundSegment(z);
+                const g = createGroundSegment(z, true);
                 groundSegments.push(g);
+                if (g._animateIn) g._animateIn();
                 ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), z);
                     laneSegments[k].push(lane);
@@ -510,8 +598,9 @@
 
             // 在后方（更大 z 值）补充段，直到覆盖 maxZ
             for (let z = currentMax + segmentLength; z <= maxZ; z += segmentLength) {
-                const g = createGroundSegment(z);
+                const g = createGroundSegment(z, true);
                 groundSegments.push(g);
+                if (g._animateIn) g._animateIn();
                 ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), z);
                     laneSegments[k].push(lane);
@@ -532,7 +621,7 @@
             }
 
             // 专注度与速度耦合 [cite: 10, 16, 33]
-            const baseSpeed = 0.15 + 0.00005 * Math.pow(focusValue, 2);
+            const baseSpeed = 0.08 + 0.00005 * Math.pow(focusValue, 2);
             const currentSpeed = baseSpeed * speedMultiplier;
             player.position.z -= currentSpeed;
 
