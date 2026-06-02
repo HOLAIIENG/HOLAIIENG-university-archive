@@ -37,51 +37,73 @@
         }
         /* 专注提醒文字 */
         #reminder {
-            position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%);
-            color: #c49790; font-size: 28px; font-weight: bold;
-            text-shadow: 0 0 20px rgba(196,151,144,0.5), 0 0 40px rgba(196,151,144,0.3);
+            position: absolute; top: 32%; left: 50%;
+            color: rgba(245, 225, 255, 0.95); font-size: 24px; font-weight: 500;
+            text-shadow:
+                0 0 12px rgba(200, 160, 220, 0.4),
+                0 0 30px rgba(180, 140, 210, 0.25),
+                0 0 60px rgba(160, 120, 200, 0.15);
             z-index: 200; pointer-events: none;
-            opacity: 0; transition: opacity 0.3s ease;
-            letter-spacing: 2px;
+            opacity: 0;
+            letter-spacing: 3px;
             white-space: nowrap;
+            padding: 6px 20px;
+            border-radius: 24px;
+            background: radial-gradient(ellipse at center, rgba(180,140,210,0.12) 0%, transparent 70%);
         }
         #reminder.show {
             opacity: 1;
-            animation: reminderPulse 2s ease-out forwards;
-        }
-        @keyframes reminderPulse {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-            30% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
-            100% { opacity: 0; transform: translate(-50%, -80%) scale(1.0); }
         }
         /* 积分变动蒙太奇（精简样式：纯色文字，无背景） */
         .score-montage {
-            --montage-font-size: 28px;
+            --montage-font-size: 26px;
             position: absolute;
             top: 32%; /* 初始参考与提醒信息同一高度（会被 JS 精准定位） */
             left: 50%;
-            transform: translateX(-50%) translateY(-50%);
             font-size: var(--montage-font-size);
-            font-weight: 700;
+            font-weight: 600;
             line-height: 1;
             padding: 0 6px;
             pointer-events: none;
             opacity: 0;
-            transition: transform 280ms cubic-bezier(.2,.9,.2,1), opacity 280ms ease-out;
             z-index: 300;
-            text-shadow: none;
-            background: transparent;
-            filter: saturate(0.55) brightness(0.75);
             text-align: center;
+            letter-spacing: 1px;
+            background: transparent;
         }
         .score-montage.show {
             opacity: 1;
-            /* 当无额外定位时，CSS 保持一个小的上移动画；JS 会在需要时覆盖 transform 以实现精确定位 */
-            transform: translateX(-50%) translateY(calc(-50% - var(--montage-font-size)));
         }
-        .score-montage.pos { color: rgba(40,100,40,0.9); }
-        .score-montage.neg { color: rgba(110,50,50,0.9); }
+        .score-montage.pos {
+            color: rgba(180, 220, 180, 0.92);
+            text-shadow: 0 0 10px rgba(150, 210, 160, 0.35), 0 0 24px rgba(140, 200, 150, 0.2);
+        }
+        .score-montage.neg {
+            color: rgba(230, 170, 175, 0.92);
+            text-shadow: 0 0 10px rgba(210, 150, 160, 0.35), 0 0 24px rgba(200, 140, 150, 0.2);
+        }
+        /* 模拟测试面板 */
+        #sim-panel {
+            position: absolute; bottom: 16px; left: 16px;
+            z-index: 400; display: flex; flex-direction: column; gap: 6px;
+            opacity: 0.35; transition: opacity 0.3s ease;
+            font-family: monospace; font-size: 11px;
+        }
+        #sim-panel:hover { opacity: 0.95; }
+        #sim-panel .sim-row { display: flex; gap: 4px; align-items: center; }
+        #sim-panel button {
+            padding: 3px 10px; border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.7);
+            border-radius: 4px; cursor: pointer; font-size: 11px;
+            font-family: monospace; transition: all 0.2s ease;
+        }
+        #sim-panel button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        #sim-panel button.active {
+            background: rgba(100,200,255,0.25); border-color: rgba(100,200,255,0.5);
+            color: #fff;
+        }
+        #sim-panel .sim-label { color: rgba(255,255,255,0.5); font-size: 10px; min-width: 60px; }
+        #sim-panel .sim-val { color: rgba(100,220,255,0.8); font-size: 11px; min-width: 32px; text-align: right; }
     </style>
 </head>
 <body>
@@ -101,6 +123,19 @@
         <div>CursorY: <span id="cursor-y">0</span></div>
     </div>
     <div id="reminder"></div>
+    <!-- 模拟测试面板 -->
+    <div id="sim-panel">
+        <div class="sim-row">
+            <span class="sim-label">SIM ATTN</span>
+            <span class="sim-val" id="sim-val-display">OFF</span>
+        </div>
+        <div class="sim-row">
+            <button id="sim-btn-off" class="active" onclick="setSimMode('off')">OFF</button>
+            <button id="sim-btn-low" onclick="setSimMode('low')">LOW</button>
+            <button id="sim-btn-high" onclick="setSimMode('high')">HIGH</button>
+            <button id="sim-btn-auto" onclick="setSimMode('auto')">AUTO</button>
+        </div>
+    </div>
     <div class="controls">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停/继续</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
@@ -159,6 +194,14 @@
         // 游戏状态
         let isPaused = false;
         
+        // 模拟注意力系统
+        let simMode = 'off';       // 'off' | 'low' | 'high' | 'auto'
+        let simAttnValue = 30;     // 当前模拟值
+        let simAttnTarget = 30;    // 目标值（缓慢趋近）
+        let simLastTick = 0;       // 上次更新目标的时间
+        const SIM_TICK_INTERVAL = 800;  // 每 800ms 更换一次目标
+        const SIM_LERP_SPEED = 0.04;    // 每帧趋近目标的速率（越小越慢越平滑）
+        
         // WebSocket连接
         let ws = null;
         const WS_URL = 'ws://localhost:8765';
@@ -191,8 +234,8 @@
             // 使用可扩展的地面与轨道段（实现无限延伸，随相机生成/销毁）
             initInfiniteGroundAndLanes();
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            // 添加平行光增强方块地面的立体感（降低强度避免进场过亮）
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            // 添加平行光增强方块地面的立体感
             const dirLight = new THREE.DirectionalLight(0xffeedd, 0.5);
             dirLight.position.set(5, 15, 10);
             scene.add(dirLight);
@@ -201,7 +244,7 @@
             composer = new THREE.EffectComposer(renderer);
             composer.addPass(new THREE.RenderPass(scene, camera));
 
-            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.4, 0.85);
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.3, 0.4, 0.95);
             composer.addPass(bloomPass);
 
             const vignettePass = new THREE.ShaderPass(THREE.VignetteShader);
@@ -712,7 +755,57 @@
             document.getElementById('cursor-x').innerText = filtered_focus_x.toFixed(0);
             document.getElementById('cursor-y').innerText = filtered_focus_y.toFixed(0);
 
+            // 模拟模式：当 WebSocket 未连接或手动开启时，注入模拟注意力值
+            if (simMode !== 'off') {
+                updateSimAttn(performance.now());
+            }
+
             composer.render();
+        }
+
+        // ---------- 模拟注意力系统 ----------
+        function setSimMode(mode) {
+            simMode = mode;
+            // 更新按钮高亮
+            ['off','low','high','auto'].forEach(m => {
+                const btn = document.getElementById('sim-btn-' + m);
+                if (btn) btn.classList.toggle('active', m === mode);
+            });
+            // 初始化目标值
+            if (mode === 'low')  { simAttnValue = 15; simAttnTarget = 15; }
+            if (mode === 'high') { simAttnValue = 65; simAttnTarget = 65; }
+            if (mode === 'auto') { simAttnValue = 50; simAttnTarget = 50; }
+            const display = document.getElementById('sim-val-display');
+            if (display) display.textContent = mode === 'off' ? 'OFF' : mode.toUpperCase();
+        }
+
+        function updateSimAttn(now) {
+            // 定期更换目标值（随机漫步）
+            if (now - simLastTick >= SIM_TICK_INTERVAL) {
+                simLastTick = now;
+                let lo, hi;
+                if (simMode === 'low')       { lo = 0;  hi = 29; }
+                else if (simMode === 'high')  { lo = 31; hi = 100; }
+                else                          { lo = 0;  hi = 100; } // auto
+
+                // 在当前目标附近随机漫步，保持缓慢变化
+                const range = hi - lo;
+                const step = (Math.random() - 0.5) * range * 0.4;
+                simAttnTarget = Math.max(lo, Math.min(hi, simAttnTarget + step));
+            }
+            // 平滑趋近目标
+            simAttnValue += (simAttnTarget - simAttnValue) * SIM_LERP_SPEED;
+            simAttnValue = Math.max(0, Math.min(100, simAttnValue));
+
+            // 注入到全局注意力变量
+            attention_value = simAttnValue;
+            focusValue = simAttnValue;
+
+            // 同时更新模拟面板显示
+            const display = document.getElementById('sim-val-display');
+            if (display && simMode !== 'off') {
+                display.textContent = simAttnValue.toFixed(1);
+            }
         }
 
         // 换道冷却帧数，防止一次跨两轨
@@ -862,28 +955,51 @@
         // 显示专注提醒文字
         function showReminder() {
             const reminders = [
-                '集中注意力哦！💪',
-                '别走神，继续跑！🏃',
-                '专注！你可以的！⚡',
-                '保持专注，冲！🔥',
-                '注意力集中起来！👀',
-                '加油，别被干扰！✨',
-                '盯紧前方！🎯',
-                '稳住，集中精神！🌟'
+                '集中注意力哦～',
+                '别走神，继续跑～',
+                '专注，你可以的～',
+                '保持专注，冲呀～',
+                '注意力集中起来～',
+                '加油，别被干扰～',
+                '盯紧前方哦～',
+                '稳住，集中精神～'
             ];
             const msg = reminders[Math.floor(Math.random() * reminders.length)];
             const reminderEl = document.getElementById('reminder');
-            
+
+            // 终止之前的动画
+            gsap.killTweensOf(reminderEl);
+
             reminderEl.textContent = msg;
             reminderEl.classList.remove('show');
-            // 强制回流后重新添加动画
-            void reminderEl.offsetWidth;
+
+            // 使用 GSAP 实现柔和的出现→悬浮→淡出动画
             reminderEl.classList.add('show');
-            
-            // 动画结束后清除
-            setTimeout(() => {
-                reminderEl.classList.remove('show');
-            }, 2100);
+            gsap.fromTo(reminderEl,
+                { opacity: 0, scale: 0.85, xPercent: -50, yPercent: -50, filter: 'blur(4px)' },
+                { opacity: 1, scale: 1.05, xPercent: -50, yPercent: -50, filter: 'blur(0px)', duration: 0.3, ease: 'power2.out' }
+            );
+            gsap.to(reminderEl, {
+                scale: 1.0,
+                xPercent: -50,
+                yPercent: -50,
+                duration: 0.2,
+                delay: 0.3,
+                ease: 'power2.out'
+            });
+            gsap.to(reminderEl, {
+                opacity: 0,
+                scale: 1.02,
+                xPercent: -50,
+                yPercent: -72,
+                filter: 'blur(3px)',
+                duration: 1.8,
+                delay: 0.6,
+                ease: 'power2.out',
+                onComplete: () => {
+                    reminderEl.classList.remove('show');
+                }
+            });
         }
 
         // 暂停/继续游戏
@@ -943,7 +1059,8 @@
                 const left = r.right + 10; // 10px gap
                 el.style.left = left + 'px';
                 el.style.top = top + 'px';
-                el.style.transform = 'translateX(0) translateY(0)';
+                el.style.marginLeft = '0';
+                el._centered = false;
             } else {
                 // center horizontally at the same height as reminder (or middle of viewport if reminder not found)
                 let centerY = window.innerHeight * 0.32; // default 32%
@@ -953,8 +1070,8 @@
                 }
                 el.style.left = '50%';
                 el.style.top = centerY + 'px';
-                // 上移一个字体高度以满足用户要求（使用 CSS 变量，如果不可用回退到 28px）
-                el.style.transform = 'translateX(-50%) translateY(calc(-50% - var(--montage-font-size, 28px)))';
+                el.style.marginLeft = '';
+                el._centered = true;
             }
         }
 
@@ -980,18 +1097,42 @@
             // 重新定位（以便在提醒出现时靠右显示）
             positionMontage();
 
-            // show
-            requestAnimationFrame(() => el.classList.add('show'));
+            // 终止之前的动画
+            gsap.killTweensOf(el);
 
-            // 重置隐藏计时器（延长显示时间以体现连续次数）
+            // 显示元素
+            el.classList.add('show');
+
+            // 使用 GSAP 实现轻柔上浮淡出动画
+            const xPct = el._centered ? -50 : 0;
+            gsap.set(el, { xPercent: xPct, yPercent: -50 });
+            gsap.fromTo(el,
+                { opacity: 0, y: 6, xPercent: xPct, yPercent: -50 },
+                { opacity: 1, y: 0, xPercent: xPct, yPercent: -50, duration: 0.25, ease: 'power2.out' }
+            );
+            gsap.to(el, {
+                opacity: 0,
+                y: -34,
+                xPercent: xPct,
+                yPercent: -50,
+                duration: 1.1,
+                delay: 0.2,
+                ease: 'power2.out',
+                onComplete: () => {
+                    el.classList.remove('show');
+                    _lastScoreKey = null;
+                    _lastScoreCount = 0;
+                }
+            });
+
+            // 重置隐藏计时器
             if (_montageHideTimer) clearTimeout(_montageHideTimer);
             _montageHideTimer = setTimeout(() => {
                 el.classList.remove('show');
-                // 清除连续计数（下一次将被视为新一次）
                 _lastScoreKey = null;
                 _lastScoreCount = 0;
                 _montageHideTimer = null;
-            }, 1200);
+            }, 1500);
         }
 
         // 根据注意力值更新场景视觉效果
@@ -1024,7 +1165,7 @@
 
             // Bloom 强度
             if (composer && composer.passes && composer.passes[1]) {
-                composer.passes[1].strength = THREE.MathUtils.lerp(0.4, 1.8, t);
+                composer.passes[1].strength = THREE.MathUtils.lerp(0.15, 0.7, t);
             }
 
             // 暗角程度
