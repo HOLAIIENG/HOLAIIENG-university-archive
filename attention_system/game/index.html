@@ -166,7 +166,7 @@
         function init() {
             // 场景初始化
             scene = new THREE.Scene();
-            scene.fog = new THREE.Fog(0xd8b5ff, 10, 60);
+            scene.fog = new THREE.Fog(0xd8b5ff, 6, 50);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -180,7 +180,7 @@
             // 角色与环境
             player = new THREE.Mesh(
                 new THREE.CapsuleGeometry(0.4, 0.8, 4, 16),
-                new THREE.MeshLambertMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.5 })
+                new THREE.MeshLambertMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.2 })
             );
             player.position.set(0, 1, 0);
             scene.add(player);
@@ -189,8 +189,8 @@
             initInfiniteGroundAndLanes();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            // 添加平行光增强方块地面的立体感
-            const dirLight = new THREE.DirectionalLight(0xffeedd, 0.6);
+            // 添加平行光增强方块地面的立体感（降低强度避免进场过亮）
+            const dirLight = new THREE.DirectionalLight(0xffeedd, 0.5);
             dirLight.position.set(5, 15, 10);
             scene.add(dirLight);
 
@@ -198,12 +198,12 @@
             composer = new THREE.EffectComposer(renderer);
             composer.addPass(new THREE.RenderPass(scene, camera));
 
-            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.4, 0.85);
             composer.addPass(bloomPass);
 
             const vignettePass = new THREE.ShaderPass(THREE.VignetteShader);
             vignettePass.uniforms["offset"].value = 1.0;
-            vignettePass.uniforms["darkness"].value = 1.2;
+            vignettePass.uniforms["darkness"].value = 1.8;
             composer.addPass(vignettePass);
 
             setInterval(spawnObstacle, 1500);
@@ -298,9 +298,11 @@
         }
 
         function spawnObstacle() {
+            // 生成 -1/0/1 三个索引对应三条轨道；与 LANE_X_POSITIONS 对应的实际 X 为 index * BLOCK_SIZE
             const lane = Math.floor(Math.random() * 3) - 1;
             const obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1 }));
-            obs.position.set(lane * 3, 0.6, player.position.z - 60);
+            // 使用与轨道间距一致的固定值（4），避免在函数定义顺序上依赖常量提升
+            obs.position.set(lane * 4, 0.6, player.position.z - 60);
             scene.add(obs);
             // 标记用于得分/碰撞判断
             obs._scored = false;
@@ -310,7 +312,8 @@
 
         // ---------- 无限地面与轨道系统 ----------
         const groundSegments = [];
-        const laneSegments = { '-3': [], '0': [], '3': [] };
+        // laneSegments 的 key 使用实际 X 值字符串以便清理时对应
+        const laneSegments = { '-4': [], '0': [], '4': [] };
         const segmentLength = 40; // 每段长度（z方向）
         const aheadRange = 240; // 相机向前需要的范围
         const behindRange = 120; // 相机向后的保留范围
@@ -324,7 +327,7 @@
                 const centerZ = z;
                 const g = createGroundSegment(centerZ);
                 groundSegments.push(g);
-                ['-3','0','3'].forEach(k => {
+                ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), centerZ);
                     laneSegments[k].push(lane);
                 });
@@ -338,7 +341,8 @@
         const BLOCK_HEIGHT_MAX = 1.0;
         const GROUND_WIDTH = 60;
         // 三条轨道的 X 坐标（这些列保留完整方块）
-        const LANE_X_POSITIONS = [-3, 0, 3];
+        // 将轨道位置与方块列中心对齐（BLOCK_SIZE 为 4），使用 -4,0,4 能让轨道与方块列中心精确对齐
+        const LANE_X_POSITIONS = [-4, 0, 4];
         // 方块地面颜色调色板（梦核风格）
         const BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc];
 
@@ -429,7 +433,8 @@
                 new THREE.Vector3(0, 0.08, half)
             ];
             const g = new THREE.BufferGeometry().setFromPoints(pts);
-            const m = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 });
+            // 将轨道线做得更隐蔽、颜色更柔和一些
+            const m = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.12 });
             const line = new THREE.Line(g, m);
             line.position.set(laneX, 0, centerZ);
             scene.add(line);
@@ -497,7 +502,7 @@
             for (let z = currentMin - segmentLength; z >= minZ; z -= segmentLength) {
                 const g = createGroundSegment(z);
                 groundSegments.push(g);
-                ['-3','0','3'].forEach(k => {
+                ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), z);
                     laneSegments[k].push(lane);
                 });
@@ -507,7 +512,7 @@
             for (let z = currentMax + segmentLength; z <= maxZ; z += segmentLength) {
                 const g = createGroundSegment(z);
                 groundSegments.push(g);
-                ['-3','0','3'].forEach(k => {
+                ['-4','0','4'].forEach(k => {
                     const lane = createLaneSegment(parseInt(k), z);
                     laneSegments[k].push(lane);
                 });
@@ -534,7 +539,8 @@
             // 使用陀螺仪/焦点数据控制角色移动
             updatePlayerPositionFromGyro();
 
-            player.position.x += (currentLane * 3 - player.position.x) * 0.1;
+            // 使用 BLOCK_SIZE 确保玩家精确移动到与轨道对齐的位置
+            player.position.x += (currentLane * BLOCK_SIZE - player.position.x) * 0.1;
 
             // 更新并维护无限地面与轨道（移到相机更新后以使用更新后的 camera.position）
 
@@ -544,7 +550,8 @@
                 const dx = obs.position.x - player.position.x;
 
                 // 当到达近距离时，记录是否是跳跃通过
-                if (Math.abs(dz) < 0.8 && Math.abs(dx) < 0.8) {
+                // 使用与轨道间距相匹配的阈值以避免左右偏移判定错误
+                if (Math.abs(dz) < 0.8 && Math.abs(dx) < (BLOCK_SIZE * 0.3)) {
                     if (player.position.y > 1.5) {
                         // 玩家在空中，通过盒子视为跳过
                         obs._jumped = true;
@@ -571,7 +578,8 @@
             });
 
             // 相机动态 [cite: 11]
-            camera.position.lerp(new THREE.Vector3(player.position.x * 0.5, 5, player.position.z + 10), 0.05);
+            // 将相机 X 完全跟随玩家，使玩家在左右轨道切换时保持居中（仍保留平滑插值）
+            camera.position.lerp(new THREE.Vector3(player.position.x, 5, player.position.z + 10), 0.12);
             camera.lookAt(player.position.x, 0, player.position.z - 5);
 
             // 天空球跟随相机（始终保持包裹）
