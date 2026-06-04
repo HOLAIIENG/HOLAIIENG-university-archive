@@ -210,7 +210,7 @@
     <div id="coin-bar-wrap">
         <div id="coin-bar-fill"></div>
         <div id="coin-bar-pct">0%</div>
-        <div id="coin-bar-label">🪙 0/100</div>
+        <div id="coin-bar-label">Score: 0/800</div>
     </div>
 
     <div id="algorithm-data">
@@ -260,6 +260,26 @@
         let lastCoinTime = 0;
         let gameStarted = false;
         let isAwakened = false; // 场景觉醒状态
+
+        // 注意力持续时间追踪（用于分阶段加速/视觉切换）
+        // 改为：任意跨区间（上或下）都会触发视觉过渡；但加/减速在新阶段稳定后（延迟）才生效，且加速/减速为立即设置（不用平滑）
+        let currentSpeedBoost = 0; // 当前速度加成（立即应用，无平滑）
+        // 可视化/配色管理：当前已应用的梦境阶段（1/2/3）
+        let currentVisualStage = 1; // 已应用到场景的阶段（1/2/3）
+        let stageAppliedTime = performance.now(); // 最近一次阶段应用时间（用于判断稳定时长）
+        let stageTransition = { active: false, from: 1, to: 1, startTime: 0, duration: 1500 };
+        const SPEED_APPLY_DELAY = 800; // ms：跨区间后等待此延时再立即应用速度加减（用户要求800ms）
+        let lastSpeedAppliedStage = currentVisualStage; // 记录当前已为其应用速度的阶段
+
+        function boostForStage(stage) {
+            if (stage === 1) return 0.0;
+            if (stage === 2) return 0.3;
+            if (stage === 3) return 0.5;
+            return 0.0;
+        }
+
+        // 横向移动灵敏度（基础值0.12，高注意力时提升）
+        let lateralMoveFactor = 0.12;
 
         // 算法数据
         let gyroscope_x = 0, gyroscope_y = 0, gyroscope_z = 0, attention_value = 0;
@@ -598,18 +618,21 @@
 
         // ==================== 金币系统 ====================
         function spawnCoinGroup() {
+            // 增加产出：根据注意力显著提高每组金币数量及高价值金币概率
             const attn = Math.min(100, Math.max(0, attention_value));
-            const baseCount = attn < 20 ? 1 : attn < 50 ? 2 : attn < 80 ? 3 : 5;
-            const count = baseCount + Math.floor(Math.random() * 2);
+            // 增强版基数（比原始实现更多金币）
+            const baseCount = attn < 20 ? 2 : attn < 50 ? 4 : attn < 80 ? 6 : 10;
+            const count = baseCount + Math.floor(Math.random() * 3); // 轻微随机性
             const lane = Math.floor(Math.random() * 3) - 1;
             const startZ = playerGroup.position.z - 45 - Math.random() * 15;
 
             for (let i = 0; i < count; i++) {
                 let cType, cMat, cValue, cScale, cColor;
                 const r = Math.random();
-                if (attn > 70 && r < 0.1) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.6; cColor = '#00ffcc'; }
-                else if (attn > 40 && r < 0.3) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.55; cColor = '#ff8c00'; }
-                else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.45; cColor = '#ffd700'; }
+                // 提高高价值金币概率：在中高注意力时更容易出现大/稀有金币
+                if (attn > 60 && r < 0.20) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.7; cColor = '#00ffcc'; }
+                else if (attn > 30 && r < 0.40) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.6; cColor = '#ff8c00'; }
+                else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.5; cColor = '#ffd700'; }
 
                 const coin = new THREE.Mesh(coinGeo, cMat);
                 const yPos = 1.0 + Math.random() * 0.5;
@@ -806,10 +829,11 @@
 
         // 更新金币进度条
         function updateCoinBar() {
-            const pct = Math.min(coinCount, 100);
+            // 左侧进度条基于总分 score 映射为 0..800 -> 0%..100%
+            const pct = Math.min(100, Math.round((score / 800) * 100));
             document.getElementById('coin-bar-fill').style.height = pct + '%';
             document.getElementById('coin-bar-pct').textContent = pct + '%';
-            document.getElementById('coin-bar-label').textContent = '🪙 ' + coinCount + '/100';
+            document.getElementById('coin-bar-label').textContent = 'Score: ' + score + '/800';
         }
 
         // ==================== 觉醒系统 ====================
@@ -969,7 +993,8 @@
                     if (_now - lastObstacleTime >= OBSTACLE_INTERVAL) { spawnObstacle(); lastObstacleTime = _now; }
                     if (Math.random() < 0.4) spawnDecoration();
                     const attn = Math.min(100, Math.max(0, attention_value));
-                    const coinInterval = attn < 20 ? 4000 : attn < 50 ? 2500 : attn < 80 ? 1500 : 800;
+                    // 缩短间隔以增加金币产出
+                    const coinInterval = attn < 20 ? 2500 : attn < 50 ? 1500 : attn < 80 ? 900 : 500;
                     if (_now - lastCoinTime >= coinInterval) { spawnCoinGroup(); lastCoinTime = _now; }
                     const d2 = new THREE.Object3D();
                     const animObj = { progress: 0 };
@@ -1072,13 +1097,46 @@
             if (isPaused || !gameStarted) { composer.render(); return; }
 
             const att = Math.min(100, Math.max(0, focusValue));
-            const targetSpeed = 0.05 + 0.001 * Math.pow(att, 1.2);
-            smoothSpeed += (targetSpeed - smoothSpeed) * SPEED_LERP_FACTOR;
+            
+            // 分阶段加速逻辑（任意跨区间后在稳定 800ms 后立即应用对应加/减速，不使用平滑）
+            const nowMs = performance.now();
+            const baseSpeed = 0.05 + 0.001 * Math.pow(att, 1.2);
+
+            // 在跨区间期间或跨区间后若满足延时（SPEED_APPLY_DELAY），立即设置 speed boost（无平滑）
+            if (stageTransition.active) {
+                // 正在过渡：以过渡起始时间为基准，延迟后应用目标阶段的速度
+                if ((nowMs - stageTransition.startTime) >= SPEED_APPLY_DELAY && lastSpeedAppliedStage !== stageTransition.to) {
+                    currentSpeedBoost = boostForStage(stageTransition.to);
+                    lastSpeedAppliedStage = stageTransition.to;
+                }
+            } else {
+                // 无过渡：以阶段应用时间为基准
+                if (currentVisualStage !== lastSpeedAppliedStage && (nowMs - stageAppliedTime) >= SPEED_APPLY_DELAY) {
+                    currentSpeedBoost = boostForStage(currentVisualStage);
+                    lastSpeedAppliedStage = currentVisualStage;
+                }
+            }
+
+            // 计算目标速度（基础 + 立即应用的加成），保留 smoothSpeed 用于平滑帧位移，速度值本身不再做加速平滑
+            const targetSpeed = baseSpeed + currentSpeedBoost;
+            smoothSpeed += (targetSpeed - smoothSpeed) * SPEED_LERP_FACTOR; // 平滑相机/位移速度感受
             const currentSpeed = Math.max(MIN_SPEED, smoothSpeed);
             playerGroup.position.z -= currentSpeed;
 
             updatePlayerPositionFromGyro();
-            playerGroup.position.x += (currentLane * BLOCK_SIZE - playerGroup.position.x) * 0.12;
+            
+            // 根据已应用的视觉阶段调整横向移动灵敏度（仅在向上切换并稳定后生效）
+            let targetLateralFactor = 0.12; // 基础灵敏度
+            if (currentVisualStage === 3 && (nowMs - stageAppliedTime) >= 3000) {
+                targetLateralFactor = 0.22; // 高专注：快速响应
+            } else if (currentVisualStage === 2 && (nowMs - stageAppliedTime) >= 3000) {
+                targetLateralFactor = 0.17; // 中专注：适度提升
+            }
+            // 平滑过渡灵敏度
+            lateralMoveFactor += (targetLateralFactor - lateralMoveFactor) * 0.08;
+            
+            // 应用横向移动
+            playerGroup.position.x += (currentLane * BLOCK_SIZE - playerGroup.position.x) * lateralMoveFactor;
 
             if (!isJumping) {
                 player.rotation.z = Math.sin(now * 0.008) * 0.08;
@@ -1341,19 +1399,143 @@
 
         // ==================== 场景视觉 ====================
         function updateSceneVisuals(att) {
-            const t = (att <= 30) ? (0.7 + att * 0.01) : (att / 100);
+            // 说明：视觉/配色只在注意力向上跨区间（从低阶段上升到更高阶段）时触发切换。
+            // 我们维护 currentVisualStage（已应用的阶段）和 stageTransition 来平滑过渡。
+            function getPreset(stage) {
+                // 返回阶段预设（颜色、雾、bloom、vignette）
+                if (stage === 1) return {
+                    topColor: new THREE.Color(0x061a14), midColor: new THREE.Color(0x0d4d3d), bottomColor: new THREE.Color(0x5eead4),
+                    sunY: 0.12, sunColor: new THREE.Color(0xecfdf5), exponent: 0.5,
+                    fogColor: new THREE.Color(0x0d4d3d), fogNear: 10, fogFar: 40,
+                    bloom: 0.3, vignette: { darkness: 2.6, offset: 0.9 },
+                    floorCol: new THREE.Color(0x0d4d3d).lerp(new THREE.Color(0x5eead4), 0.45),
+                    playerCol: new THREE.Color(0xecfdf5)
+                };
+                if (stage === 2) return {
+                    topColor: new THREE.Color(0x020014), midColor: new THREE.Color(0x1e1b4b), bottomColor: new THREE.Color(0xa78bfa),
+                    sunY: 0.18, sunColor: new THREE.Color(0xfde68a), exponent: 0.65,
+                    fogColor: new THREE.Color(0x1e1b4b), fogNear: 14, fogFar: 50,
+                    bloom: 0.45, vignette: { darkness: 2.0, offset: 1.05 },
+                    floorCol: new THREE.Color(0x1e1b4b).lerp(new THREE.Color(0xa78bfa), 0.35),
+                    playerCol: new THREE.Color(0xfde68a)
+                };
+                // stage 3
+                return {
+                    topColor: new THREE.Color(0xd4a574), midColor: new THREE.Color(0xe8956a), bottomColor: new THREE.Color(0xf4c2a1),
+                    sunY: 0.22, sunColor: new THREE.Color(0xfff0d0), exponent: 0.75,
+                    fogColor: new THREE.Color(0xe8956a), fogNear: 18, fogFar: 65,
+                    bloom: 0.65, vignette: { darkness: 1.2, offset: 1.15 },
+                    floorCol: new THREE.Color(0x1e1b4b).lerp(new THREE.Color(0xf4c2a1), 0.5),
+                    playerCol: new THREE.Color(0xfff0d0)
+                };
+            }
+
+            // 计算当前由注意力值决定的目标阶段（但只作为触发上升过渡的依据）
+            let dreamStage = (att < 15) ? 1 : (att <= 60 ? 2 : 3);
+            const nowMs = performance.now();
+
+            // 如果注意力跨区间（上或下），启动过渡（支持向上和向下）
+            if (dreamStage !== currentVisualStage && !stageTransition.active) {
+                stageTransition.active = true;
+                stageTransition.from = currentVisualStage;
+                stageTransition.to = dreamStage;
+                stageTransition.startTime = nowMs;
+                stageTransition.duration = 1500; // ms
+            }
+
+            // 计算用于渲染的预设（可能处于过渡中）
+            let presetFrom = getPreset(stageTransition.active ? stageTransition.from : currentVisualStage);
+            let presetTo = getPreset(stageTransition.active ? stageTransition.to : currentVisualStage);
+            let mixT = 0;
+            if (stageTransition.active) {
+                mixT = Math.min(1, (nowMs - stageTransition.startTime) / stageTransition.duration);
+                // 如果完成过渡，则正式应用新阶段
+                if (mixT >= 1.0) {
+                    currentVisualStage = stageTransition.to;
+                    stageAppliedTime = nowMs;
+                    stageTransition.active = false;
+                    presetFrom = getPreset(currentVisualStage);
+                    presetTo = presetFrom;
+                    mixT = 0;
+                }
+            }
+
+            // 插值得到最终用于渲染的参数
+            function lerpColor(a, b, t) { return a.clone().lerp(b, t); }
+            const topColor = lerpColor(presetFrom.topColor, presetTo.topColor, mixT);
+            const midColor = lerpColor(presetFrom.midColor, presetTo.midColor, mixT);
+            const bottomColor = lerpColor(presetFrom.bottomColor, presetTo.bottomColor, mixT);
+            const sunColor = lerpColor(presetFrom.sunColor, presetTo.sunColor, mixT);
+            const sunY = THREE.MathUtils.lerp(presetFrom.sunY, presetTo.sunY, mixT);
+            const exponent = THREE.MathUtils.lerp(presetFrom.exponent, presetTo.exponent, mixT);
+
             if (skyMesh) {
                 const u = skyMesh.material.uniforms;
-                u.topColor.value.setHSL(0.75, THREE.MathUtils.lerp(0.2, 0.6, t), THREE.MathUtils.lerp(0.05, 0.25, t));
-                u.midColor.value.setHSL(0.78, THREE.MathUtils.lerp(0.2, 0.5, t), THREE.MathUtils.lerp(0.3, 0.7, t));
-                u.bottomColor.value.setHSL(THREE.MathUtils.lerp(0.0, 0.95, t), THREE.MathUtils.lerp(0.2, 0.4, t), THREE.MathUtils.lerp(0.3, 0.8, t));
-                u.sunY.value = THREE.MathUtils.lerp(0.05, 0.25, t);
-                u.sunColor.value.setHSL(THREE.MathUtils.lerp(0.05, 0.12, t), THREE.MathUtils.lerp(0.5, 0.8, t), THREE.MathUtils.lerp(0.3, 0.7, t));
+                u.topColor.value.copy(topColor);
+                u.midColor.value.copy(midColor);
+                u.bottomColor.value.copy(bottomColor);
+                u.sunY.value = sunY;
+                u.sunColor.value.copy(sunColor);
+                u.exponent.value = exponent;
             }
-            scene.fog.color.setHSL(0.78, THREE.MathUtils.lerp(0.1, 0.4, t), THREE.MathUtils.lerp(0.3, 0.7, t));
-            scene.fog.near = THREE.MathUtils.lerp(5, 20, t); scene.fog.far = THREE.MathUtils.lerp(30, 80, t);
-            if (composer.passes[1]) composer.passes[1].strength = THREE.MathUtils.lerp(0.15, 0.7, t);
-            if (composer.passes[2]) { composer.passes[2].uniforms["darkness"].value = THREE.MathUtils.lerp(2.5, 0.8, t); composer.passes[2].uniforms["offset"].value = THREE.MathUtils.lerp(0.6, 1.2, t); }
+
+            // 雾、bloom、暗角：按已应用阶段（或过渡插值）固定为阶段预设值，避免在同一阶段内反复抖动
+            const fogColor = lerpColor(presetFrom.fogColor, presetTo.fogColor, mixT);
+            scene.fog.color.copy(fogColor);
+            scene.fog.near = THREE.MathUtils.lerp(presetFrom.fogNear, presetTo.fogNear, mixT);
+            scene.fog.far = THREE.MathUtils.lerp(presetFrom.fogFar, presetTo.fogFar, mixT);
+
+            if (composer.passes[1]) composer.passes[1].strength = THREE.MathUtils.lerp(presetFrom.bloom, presetTo.bloom, mixT);
+            if (composer.passes[2]) {
+                composer.passes[2].uniforms["darkness"].value = THREE.MathUtils.lerp(presetFrom.vignette.darkness, presetTo.vignette.darkness, mixT);
+                composer.passes[2].uniforms["offset"].value = THREE.MathUtils.lerp(presetFrom.vignette.offset, presetTo.vignette.offset, mixT);
+            }
+
+            // ==================== 地面 / 角色 / 障碍物 配色同步 ====================
+            (function(){
+                // helper: compute complement by shifting hue 180deg
+                function complementColor(c){
+                    const hsl = {};
+                    c.getHSL(hsl);
+                    hsl.h = (hsl.h + 0.5) % 1.0;
+                    const nc = new THREE.Color();
+                    nc.setHSL(hsl.h, Math.min(1, hsl.s * 1.05), Math.min(1, Math.max(0.12, hsl.l * 0.95)));
+                    return nc;
+                }
+
+                // 通过过渡插值得到 floor/player 色
+                const floorCol = lerpColor(presetFrom.floorCol, presetTo.floorCol, mixT);
+                const playerCol = lerpColor(presetFrom.playerCol, presetTo.playerCol, mixT);
+
+                // apply to player materials & glow & point light (保持平滑 lerp)
+                if (player && player.material) {
+                    player.material.color.lerp(playerCol, 0.12);
+                    if (player.material.emissive) player.material.emissive.lerp(playerCol, 0.08);
+                    const eiTarget = THREE.MathUtils.clamp(0.25 + att / 200, 0.15, 1.2);
+                    player.material.emissiveIntensity = THREE.MathUtils.lerp(player.material.emissiveIntensity || 0.3, eiTarget, 0.06);
+                }
+                if (playerGroup && playerGroup._glow) playerGroup._glow.material.color.lerp(playerCol, 0.08);
+                if (playerGroup && playerGroup._pointLight) playerGroup._pointLight.color.lerp(playerCol, 0.08);
+
+                // apply to ground: update base material color of instanced meshes
+                groundSegments.forEach(seg => {
+                    try {
+                        const im = seg._iMesh;
+                        if (im && im.material) {
+                            im.material.color.lerp(floorCol, 0.08);
+                            im.material.needsUpdate = true;
+                        }
+                    } catch (e) { }
+                });
+
+                // obstacles: set to complementary color for contrast (平滑过渡)
+                const comp = complementColor(floorCol);
+                obstacles.forEach(o => {
+                    if (!o.material) return;
+                    if (o.material.color) o.material.color.lerp(comp, 0.08);
+                    if (o.material.emissive) o.material.emissive.lerp(comp, 0.06);
+                });
+            })();
         }
 
         function applyAttnEffects() {
