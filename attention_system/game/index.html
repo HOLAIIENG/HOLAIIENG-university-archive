@@ -355,6 +355,8 @@
 
         function startGame() {
             if (gameStarted) return;
+            // 确保 AudioContext 在用户点击开始后被唤醒，避免浏览器自动播放策略阻止音效
+            try { ensureAudioContext(); } catch (e) { }
             gameStarted = true;
             document.getElementById('intro').classList.add('hidden');
             setTimeout(() => { document.getElementById('intro').style.display = 'none'; }, 800);
@@ -491,6 +493,48 @@
             jumpParticleSystem.material.color.set(color);
             jumpParticleSystem.geometry.attributes.position.needsUpdate = true;
             setTimeout(() => { if (jumpParticleSystem) jumpParticleSystem.material.color.set(0xffd1dc); }, 600);
+        }
+
+        // --- 简单 WebAudio 合成的吃金币音效（按 coin type 调节音高/感觉）
+        let _audioCtx = null;
+        function ensureAudioContext() {
+            if (!_audioCtx) {
+                try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { _audioCtx = null; }
+            }
+            if (_audioCtx && _audioCtx.state === 'suspended') _audioCtx.resume();
+            return _audioCtx;
+        }
+
+        function playCoinSound(type) {
+            const ctx = ensureAudioContext();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+
+            // 主音: 短促上扬然后快速降落
+            const osc = ctx.createOscillator(); osc.type = 'sine';
+            let base = 900;
+            if (type === 'large') base = 1200;
+            if (type === 'rare') base = 1600;
+            osc.frequency.setValueAtTime(base, now);
+            osc.frequency.exponentialRampToValueAtTime(base * 0.45, now + 0.22);
+
+            const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+            g.gain.linearRampToValueAtTime(0.16, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+
+            osc.connect(g);
+            g.connect(ctx.destination);
+
+            // 短冲击增加质感
+            const click = ctx.createOscillator(); click.type = 'square';
+            click.frequency.setValueAtTime(base * 3.2, now);
+            const cg = ctx.createGain(); cg.gain.setValueAtTime(0.0001, now);
+            cg.gain.exponentialRampToValueAtTime(0.03, now + 0.008);
+            cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+            click.connect(cg); cg.connect(ctx.destination);
+
+            osc.start(now); click.start(now);
+            click.stop(now + 0.07); osc.stop(now + 0.28);
         }
 
         function emitJumpParticles() {
@@ -657,6 +701,9 @@
 
             // 1) 粒子爆发
             emitParticlesAt(coin.position.clone(), 12, coin._coinColor === '#ffd700' ? 0xffd700 : coin._coinColor === '#ff8c00' ? 0xff8c00 : 0x00ffcc, 3, 0.5);
+
+            // 音效：播放吃金币音（合成）
+            try { playCoinSound(coin._coinType); } catch (e) { }
 
             // 2) 弹出文字
             showCoinPopup(coin._coinValue, coin._coinType);
@@ -825,6 +872,28 @@
             document.body.appendChild(popup);
             gsap.fromTo(popup, { opacity: 0, y: 0, xPercent: -50, scale: 0.5 }, { opacity: 1, y: -20, xPercent: -50, scale: 1.2, duration: 0.2, ease: "power2.out" });
             gsap.to(popup, { opacity: 0, y: -60, xPercent: -50, scale: 0.8, duration: 0.6, delay: 0.3, ease: "power2.in", onComplete: () => { popup.remove(); } });
+        }
+
+        // 非被收集时的消失粒子效果（避免金币突然消失）
+        function playCoinVanish(coin) {
+            if (!coin || coin._animating) return;
+            coin._animating = true;
+
+            // 在世界坐标位置喷发少量粒子并缩放动画后安全移除
+            emitParticlesAt(coin.position.clone(), 8, coin._coinColor === '#ffd700' ? 0xffd700 : coin._coinColor === '#ff8c00' ? 0xff8c00 : 0x00ffcc, 1.6, 0.6);
+
+            // 3D 缩小并淡出
+            gsap.to(coin.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 0.45, ease: "power2.in" });
+            gsap.to(coin.rotation, { z: Math.PI * 2, duration: 0.45, ease: "power2.in" });
+
+            setTimeout(() => {
+                try {
+                    const idx = coins.indexOf(coin);
+                    if (idx > -1) coins.splice(idx, 1);
+                    scene.remove(coin);
+                    disposeMesh(coin);
+                } catch (e) { }
+            }, 480);
         }
 
         // 更新金币进度条
@@ -1212,7 +1281,10 @@
                 if (obstacles[i].position.z > playerGroup.position.z + 20) { scene.remove(obstacles[i]); disposeMesh(obstacles[i]); obstacles.splice(i, 1); }
             }
             for (let i = coins.length - 1; i >= 0; i--) {
-                if (coins[i].position.z > playerGroup.position.z + 20 && !coins[i]._collected) { scene.remove(coins[i]); coins.splice(i, 1); }
+                if (coins[i].position.z > playerGroup.position.z + 20 && !coins[i]._collected) {
+                    // 播放消失粒子效果，安全移除（避免瞬间消失）
+                    playCoinVanish(coins[i]);
+                }
             }
             for (let i = decorations.length - 1; i >= 0; i--) {
                 if (decorations[i].position.z > playerGroup.position.z + 20) { scene.remove(decorations[i]); disposeMesh(decorations[i]); decorations.splice(i, 1); }
@@ -1415,7 +1487,8 @@
                     topColor: new THREE.Color(0x020014), midColor: new THREE.Color(0x1e1b4b), bottomColor: new THREE.Color(0xa78bfa),
                     sunY: 0.18, sunColor: new THREE.Color(0xfde68a), exponent: 0.65,
                     fogColor: new THREE.Color(0x1e1b4b), fogNear: 14, fogFar: 50,
-                    bloom: 0.45, vignette: { darkness: 2.0, offset: 1.05 },
+                    // 在梦境二取消黑色模糊边缘（vignette）
+                    bloom: 0.45, vignette: { darkness: 0.0, offset: 1.05 },
                     floorCol: new THREE.Color(0x1e1b4b).lerp(new THREE.Color(0xa78bfa), 0.35),
                     playerCol: new THREE.Color(0xfde68a)
                 };
@@ -1424,7 +1497,8 @@
                     topColor: new THREE.Color(0xd4a574), midColor: new THREE.Color(0xe8956a), bottomColor: new THREE.Color(0xf4c2a1),
                     sunY: 0.22, sunColor: new THREE.Color(0xfff0d0), exponent: 0.75,
                     fogColor: new THREE.Color(0xe8956a), fogNear: 18, fogFar: 65,
-                    bloom: 0.65, vignette: { darkness: 1.2, offset: 1.15 },
+                    // 在梦境三也取消 vignette
+                    bloom: 0.65, vignette: { darkness: 0.0, offset: 1.15 },
                     floorCol: new THREE.Color(0x1e1b4b).lerp(new THREE.Color(0xf4c2a1), 0.5),
                     playerCol: new THREE.Color(0xfff0d0)
                 };
