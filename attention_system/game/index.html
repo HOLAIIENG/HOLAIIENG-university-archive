@@ -151,6 +151,74 @@
         .sim-btn.active { background: rgba(200,160,255,0.25); border-color: rgba(200,160,255,0.5); color: #fff; }
         #sim-val-display { font-family: monospace; font-size: 11px; color: rgba(200,180,255,0.6); min-width: 28px; text-align: center; }
 
+        /* 原神场景 HUD（专注力积分>=90%时显示） */
+        #genshin-hud {
+            position: fixed; top: 158px; left: 50%; transform: translateX(-50%);
+            z-index: 650; display: none; pointer-events: none;
+            padding: 8px 24px; border-radius: 24px;
+            background: rgba(0,0,0,0.45); border: 1px solid rgba(255,215,0,0.3);
+            color: #ffd700; font-size: 15px; font-weight: 600; letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255,215,0,0.5);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        }
+
+        /* 游戏结束画面（专注力积分100%） */
+        #ending {
+            position: fixed; inset: 0; z-index: 1100;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at 50% 60%, #1a0a2e 0%, #0d0518 60%, #000 100%);
+            opacity: 0; transition: opacity 1s ease;
+        }
+        #ending.active { display: flex; }
+        #ending.visible { opacity: 1; }
+        #ending { overflow-y: auto; padding: 4vh 0 5vh; justify-content: flex-start; }
+        #ending h1 {
+            font-size: clamp(28px, 5vw, 44px); font-weight: 200; letter-spacing: 0.4em;
+            color: #ffe9a0; text-shadow: 0 0 40px rgba(255,215,0,0.4); margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+        #ending p { color: rgba(220,200,255,0.6); font-size: 14px; letter-spacing: 0.2em; margin-bottom: 14px; flex-shrink: 0; }
+        #ending .final-score {
+            font-size: 22px; color: #fff; font-weight: 700; letter-spacing: 2px; margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255,215,0,0.4); flex-shrink: 0;
+        }
+
+        /* 注意力检测报告卡片 */
+        #report-card {
+            width: min(680px, 92vw); flex-shrink: 0;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,215,0,0.25); border-radius: 16px;
+            padding: 18px 22px; margin-bottom: 22px;
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+        }
+        #report-title { font-size: 19px; color: #ffe9a0; letter-spacing: 5px; text-align: center; margin-bottom: 6px; font-weight: 600; }
+        #report-meta { font-size: 12px; color: rgba(255,255,255,0.45); text-align: center; margin-bottom: 14px; font-family: monospace; }
+        #report-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
+        .report-item { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 4px; text-align: center; }
+        .report-item .ri-val { font-size: 19px; font-weight: 700; color: #fff; }
+        .report-item .ri-label { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 1px; }
+        #report-chart { width: 100%; height: auto; display: block; border-radius: 10px; background: rgba(0,0,0,0.35); margin-bottom: 14px; }
+        #report-rating { display: flex; align-items: center; gap: 14px; }
+        #rating-badge {
+            width: 50px; height: 50px; flex-shrink: 0; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; font-weight: 800; color: #ffd700;
+            background: rgba(255,215,0,0.12); border: 2px solid rgba(255,215,0,0.5);
+            text-shadow: 0 0 12px rgba(255,215,0,0.5);
+        }
+        #rating-text { font-size: 13px; color: rgba(255,255,255,0.78); line-height: 1.7; text-align: left; }
+        .ending-actions { display: flex; gap: 16px; flex-shrink: 0; }
+        #ending .restart-btn {
+            padding: 14px 48px; background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.35);
+            color: #ffe9a0; font-size: 18px; letter-spacing: 0.3em; border-radius: 40px;
+            cursor: pointer; transition: all 0.3s ease; font-family: inherit;
+        }
+        #ending .restart-btn:hover {
+            background: rgba(255,215,0,0.25); border-color: rgba(255,215,0,0.7);
+            box-shadow: 0 0 30px rgba(255,200,80,0.3); transform: scale(1.05);
+        }
+
         /* 开场 */
         #intro {
             position: fixed; inset: 0; z-index: 1000;
@@ -234,6 +302,30 @@
     </div>
     <div class="controls" id="controls-hint">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停</div>
 
+    <!-- 原神场景 HUD（专注力积分90%~100%期间显示，场景由 three.js 直接渲染） -->
+    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">90</span>% / 100% · 保持专注，冲向终点之门</div>
+
+    <!-- 游戏结束画面 + 注意力检测报告 -->
+    <div id="ending">
+        <h1>梦境通关</h1>
+        <p>专注力积分达到 100% · GAME CLEAR</p>
+        <div class="final-score">最终得分: <span id="final-score">0</span> 🪙 <span id="final-coins">0</span></div>
+        <div id="report-card">
+            <div id="report-title">注意力检测报告</div>
+            <div id="report-meta"></div>
+            <div id="report-grid"></div>
+            <canvas id="report-chart" width="640" height="200"></canvas>
+            <div id="report-rating">
+                <span id="rating-badge">-</span>
+                <span id="rating-text"></span>
+            </div>
+        </div>
+        <div class="ending-actions">
+            <button class="restart-btn" id="restart-btn">再次入梦</button>
+            <button class="restart-btn" id="save-report-btn">保存报告</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/RenderPass.js"></script>
@@ -242,6 +334,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/shaders/VignetteShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/loaders/DRACOLoader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
 
     <script>
@@ -260,6 +354,13 @@
         let lastCoinTime = 0;
         let gameStarted = false;
         let isAwakened = false; // 场景觉醒状态
+
+        // 原神场景接入：专注力积分（score/FOCUS_TARGET_SCORE 百分比）>=90% 进入场景，100% 游戏结束
+        const FOCUS_TARGET_SCORE = 800;
+        let genshinActive = false, genshinEntering = false, gameEnded = false;
+
+        // 注意力检测报告数据（每秒采样一次，游戏结束时生成报告）
+        let attnHistory = [], sessionStartTime = 0, hitCount = 0, reportText = '';
 
         // 注意力持续时间追踪（用于分阶段加速/视觉切换）
         // 改为：任意跨区间（上或下）都会触发视觉过渡；但加/减速在新阶段稳定后（延迟）才生效，且加速/减速为立即设置（不用平滑）
@@ -358,6 +459,9 @@
             // 确保 AudioContext 在用户点击开始后被唤醒，避免浏览器自动播放策略阻止音效
             try { ensureAudioContext(); } catch (e) { }
             gameStarted = true;
+            sessionStartTime = Date.now();
+            attnHistory.length = 0;
+            hitCount = 0;
             document.getElementById('intro').classList.add('hidden');
             setTimeout(() => { document.getElementById('intro').style.display = 'none'; }, 800);
             document.getElementById('ui').classList.add('visible');
@@ -898,12 +1002,1030 @@
 
         // 更新金币进度条
         function updateCoinBar() {
-            // 左侧进度条基于总分 score 映射为 0..800 -> 0%..100%
-            const pct = Math.min(100, Math.round((score / 800) * 100));
+            // 左侧进度条基于总分 score 映射为 0..FOCUS_TARGET_SCORE -> 0%..100%
+            const pct = Math.min(100, Math.round((score / FOCUS_TARGET_SCORE) * 100));
             document.getElementById('coin-bar-fill').style.height = pct + '%';
             document.getElementById('coin-bar-pct').textContent = pct + '%';
-            document.getElementById('coin-bar-label').textContent = 'Score: ' + score + '/800';
+            document.getElementById('coin-bar-label').textContent = 'Score: ' + score + '/' + FOCUS_TARGET_SCORE;
         }
+
+        // ==================== 原神场景接入 ====================
+        function getFocusPct() {
+            return Math.min(100, (score / FOCUS_TARGET_SCORE) * 100);
+        }
+
+        let _lastFocusPctShown = -1;
+        function checkFocusProgress() {
+            if (gameEnded) return;
+            const pct = getFocusPct();
+            const pctInt = Math.floor(pct);
+            if (pctInt !== _lastFocusPctShown) {
+                _lastFocusPctShown = pctInt;
+                updateCoinBar();
+                const hudPct = document.getElementById('genshin-pct');
+                if (hudPct) hudPct.textContent = pctInt;
+            }
+            if (!genshinActive && pct >= 90) enterGenshinScene();
+            if (pct >= 100) endGame();
+        }
+
+        // ==================== 原神场景（场景搭建代码移植自 assets/www-genshin-main） ====================
+        // 移植内容：渐变天空(gradientBackground)、云海(Cloud)、远景大云(BigCloud)、极光光幕(PolarLight)、
+        // 雾气(HashFog着色器原样移植)、星屑粒子(starParticle)、石柱(Column)、悬空石路(Road，含从下方弹起入场)、
+        // 终点大门(DOOR+WHITE_PLANE)、前进相机(ForwardCamera, 速度-88)、灯光与雾(Game.ts)。
+        // 模型与贴图全部程序化生成，无需构建、无需本地服务器。
+        let gScene = null, gCamera = null, gComposer = null, gReady = false;
+        const gCenter = new THREE.Vector3();          // 对应 ForwardCamera.cameraCenter
+        const G_SPEED = 88;                           // 原版前进速度
+        const G_SPAN = 20600;                         // 场景循环长度 zLength*0.1（Config.ts: 206000）
+        const G_SPAN_RAW = 206000;
+        const G_PILLAR_SPAN = 9000;                   // 程序化兜底石柱的循环长度
+        const G_DOOR_Z = -3200;
+        const G_ROAD_STEP = 30, G_ROAD_COUNT = 46, G_ROAD_Y = -38;
+        let gCamState = 'fly';                        // fly | stop | through
+        // 素材目录（相对 index.html）
+        const G_ASSET_DIR = 'assets/www-genshin-main/public/Genshin/Login/';
+        const G_TEX_DIR = G_ASSET_DIR + 'Textures/';
+        let gGLTF = null, gTexLoader = null;
+        let gCloudInst = null, gCloudPos = [];
+        let gPolarMat = null, gPolarInst = null, gPolarTransforms = [], gPolarMeshes = [];
+        let gHashFogMat = null, gHashFogMesh = null;
+        let gStars = null, gBigCloudGroup = null;
+        let gColumnSets = [], gPillars = [], gRoadGLB = null, gRoadSlabs = [];
+        let gDoor = null, gDoorBg = null, gDoorMixer = null, gDoorAnimDone = false, gDoorOpening = false;
+        let gDirLight = null;
+        const _gDummy = new THREE.Object3D();
+
+        // 摆位数据移植自 src/core/datas（ColumnList/CloudList/PolarLightList，原始坐标系）
+        const G_COLUMN_DATA = {"SM_Qiao01":[[-3259.54,55909.38,-8971.05,0,0,-3.26,0.8],[19413.68,26615.11,-9828.82,0,0,-5.34,0.8],[16803.78,85760.77,-9828.82,0,0,-2.88,0.8],[-3259.54,154108.7,-9828.82,0,0,-3.26,0.8],[7277.17,116763.12,-9828.82,0,0,-5.34,0.8],[25034.26,183082.17,-9828.82,0,0,-2.88,0.8]],"SM_Qiao02":[[-9677.17,56694.38,-8971.05,0,0,-3.26,7.57],[-16160.93,57487.46,-8971.05,0,0,-3.26,7.57],[6706.94,30988.29,-9828.82,0,0,-5.34,7.57],[10552.28,36268.59,-9828.82,0,0,-5.34,7.57],[10555.82,84097.91,-9828.82,0,0,-2.88,7.57],[-9677.17,154893.7,-9828.82,0,0,-3.26,7.57],[-16160.93,155686.78,-9828.82,0,0,-3.26,7.57],[11083.29,121989.55,-9828.82,0,0,-5.34,7.57],[14928.63,127269.85,-9828.82,0,0,-5.34,7.57],[18786.29,181419.3,-9828.82,0,0,-2.88,7.57],[12424.48,53632.54,-8836.33,0,0,-0.14,7.57],[5957.73,54554.15,-8836.33,0,0,-0.14,7.57],[20564.82,21186.92,-12093.55,0,0,-0.19,7.57],[14154.31,22441.3,-12093.55,0,0,-0.19,7.57],[-20425.44,93584.4,-12093.55,0,0,-3.04,7.57],[-13926.08,94237.45,-12093.55,0,0,-3.04,7.57],[-12631.35,83666.99,-6470.84,0,0,-3.84,7.57],[-7632.57,79462.19,-6470.84,0,0,-3.84,7.57],[-43669.46,107924.12,-12093.55,0,0,-5.12,7.57],[-46243.29,101920.48,-12093.55,0,0,-5.12,7.57],[12899.75,150950.73,-9694.1,0,0,-0.19,7.57],[6489.23,152205.14,-9694.1,0,0,-0.19,7.57],[28685.56,121142.08,-12093.55,0,0,-0.19,7.57],[22275.04,122396.45,-12093.55,0,0,-0.19,7.57],[-20425.44,191783.73,-12093.55,0,0,-3.04,7.57],[-13926.08,192436.77,-12093.55,0,0,-3.04,7.57],[-15131.77,180023.33,-7205.48,0,0,-3.84,7.57],[-10132.99,175818.53,-7205.48,0,0,-3.84,7.57],[-43669.46,206123.42,-12093.55,0,0,-5.12,7.57],[-46243.29,200119.8,-12093.55,0,0,-5.12,7.57]],"SM_ZhuZi01":[[-19991.23,57955.97,-12244.69,0,0,-3.26,7.49],[-18525.85,69364.14,-12612.54,0,0,0,9.76],[-4961.68,77231.14,-16825.37,0,0,0,7.57],[-28871.62,103671.23,-11160.32,0,0,0,7.57],[18490.02,38575.96,-18797.49,0,0,-3.22,10.6],[13441.07,68078.86,-31761.5,0,0,0,16.33],[13322.26,94559.95,-14267.74,0,0,-2.85,7.57],[4877.59,7859.61,-8885.87,0,0,0,7.57],[-47983.31,98522.4,-21724.87,0,0,0,7.57],[-4796.11,14035.09,-10501.75,0,0,2.73,5.52],[-19991.23,156155.3,-9828.82,0,0,-3.26,5.52],[-18525.85,167563.45,-12612.54,0,0,0,9.76],[21543.86,202600.36,-11815.69,0,0,0,7.57],[-28871.62,201870.55,-11160.32,0,0,0,7.57],[27176.13,183971.92,-13077.91,0,0,0,7.57],[9400.02,134814.62,-17395.76,0,0,-3.22,10.6],[13441.07,166278.17,-33032.77,0,0,0,16.33],[21552.73,191881.36,-14267.74,0,0,-2.85,7.57],[4877.59,106058.93,-13314.7,0,0,0,7.57],[-14183.06,121644.65,-13454.14,0,0,3.1,7.57],[-47983.31,196721.72,-21724.87,0,0,0,7.57]],"SM_ZhuZi02":[[16131.76,53104.19,-15754.45,0,0,-0.14,12.56],[-24156.43,48468.04,-11681.44,0,0,-0.19,7.57],[12409.99,39026.4,-9229.88,0,0,-0.19,7.57],[13072.63,15697.74,-9052.71,0,0,-0.19,7.57],[-24151.42,93210.02,-10667.05,0,0,-3.04,7.57],[24239.87,20467.79,-10667.05,0,0,-0.19,7.57],[-7462.1,173587.48,-13131.17,0,0,-0.19,12.3],[-46214.1,154239.41,-11681.44,0,0,-0.19,7.57],[16786.33,130027.66,-6284.35,0,0,-0.19,7.57],[21461.64,110428.16,-12232.26,0,0,-0.19,10.35],[-24151.42,191409.36,-10667.05,0,0,-3.04,7.57],[32360.61,120422.95,-10667.05,0,0,-0.19,7.57],[-10041.13,151780.16,-4538.24,0,0,-0.19,4.36],[-15583.6,24915.45,-16764.29,0,0,-0.19,11.01],[-5821.24,114219,-14220.5,0,0,-0.19,8.77],[18945.66,86650.52,-13077.91,0,0,-0.14,11.02]],"SM_ZhuZi03":[[14190.16,22434.29,-9103.71,0,0,-0.19,4.16],[-13962.42,94233.8,-9103.71,0,0,-3.04,4.16],[22310.89,122389.44,-9103.71,0,0,-0.19,4.16],[-13962.42,192433.11,-9103.71,0,0,-3.04,4.16],[-23313.97,25261.84,-22485.36,0,0,3.1,7.57],[-17155.32,48441.03,-22345.92,0,0,0,7.57],[-21913.43,121991.04,-22485.36,0,0,3.1,7.57],[-39213,154212.38,-22345.92,0,0,0,7.57]],"SM_Qiao04":[[-6615.05,35478.82,-10267.71,0,0,0,7.57],[21913.41,38149.66,-4688.34,0,0,-3.22,7.57],[25049.79,37910.36,-4688.34,0,0,-3.22,7.57],[-12802.35,69364.13,-7371,0,0,0,7.57],[-15947.84,69364.14,-7371,0,0,0,7.57],[7843.3,92904.8,-9026.2,0,0,-2.85,7.57],[10854.39,93814.42,-9026.2,0,0,-2.85,7.57],[-9760.54,35478.82,-10267.71,0,0,0,7.57],[-12802.35,69364.13,-7371,0,0,0,7.57],[-15947.84,69364.14,-7371,0,0,0,7.57],[-10147.13,133691.66,-6631.95,0,0,0,7.57],[3693.11,135250.05,-4688.34,0,0,-3.22,7.57],[6829.48,135010.75,-4688.34,0,0,-3.22,7.57],[-12802.35,167563.45,-7371,0,0,0,7.57],[-15947.84,167563.45,-7371,0,0,0,7.57],[16073.78,190226.2,-9026.2,0,0,-2.85,7.57],[19084.87,191135.83,-9026.2,0,0,-2.85,7.57],[-13292.62,133691.66,-6631.95,0,0,0,7.57],[-12802.35,167563.45,-7371,0,0,0,7.57],[-15947.84,167563.45,-7371,0,0,0,7.57],[10601.09,7859.6,-3644.34,0,0,0,7.57],[-21301.37,25171.66,-3783.78,0,0,3.1,7.57],[-18159.03,25030.85,-3783.78,0,0,3.1,7.57],[-19169.94,48441.03,-3644.34,0,0,0,7.57],[-22315.43,48441.03,-3644.34,0,0,0,7.57],[7455.6,7859.6,-3644.34,0,0,0,7.57],[10601.09,106058.93,-3644.34,0,0,0,7.57],[-19900.83,121900.85,-3783.78,0,0,3.1,7.57],[-16758.5,121760.05,-3783.78,0,0,3.1,7.57],[-41227.61,154212.38,-3644.34,0,0,0,7.57],[-44373.1,154212.39,-3644.34,0,0,0,7.57],[7455.6,106058.93,-3644.34,0,0,0,7.57]],"SM_Qiao03":[[-8441.4,11828.74,-4585.22,0,0,3.69,7.57],[-5816.18,13430.53,-4585.22,0,0,3.69,7.57],[-11060.07,10230.94,-4585.22,0,0,3.69,7.57],[-21684.16,67868.18,-1523.6,0,0,3.56,16.79],[-15456.73,70656.77,-1523.6,0,0,3.56,16.79],[-35647.27,65416.07,-1523.6,0,0,3.56,16.79],[-22937.42,82841.48,-8660.21,0,0,5.63,16.79],[-28350.31,86995.72,-8660.21,0,0,5.63,16.79],[-12151.61,74563.68,-8660.21,0,0,5.63,16.79],[-17564.5,78717.92,-8660.21,0,0,5.63,16.79],[-1365.8,66285.88,-8660.21,0,0,5.63,16.79],[-6778.69,70440.12,-8660.21,0,0,5.63,16.79],[9420.01,58008.08,-8660.21,0,0,5.63,16.79],[4007.12,62162.32,-8660.21,0,0,5.63,16.79],[-10240.84,111312.08,-5504.83,0,0,3.69,7.57],[-7615.61,112913.88,-5504.83,0,0,3.69,7.57],[-12859.51,109714.29,-5504.83,0,0,3.69,7.57],[-21684.16,166067.5,-1523.6,0,0,3.56,16.79],[-15456.73,168856.08,-1523.6,0,0,3.56,16.79],[-35647.27,163615.41,-1523.6,0,0,3.56,16.79],[-22937.42,181040.8,-8660.21,0,0,5.63,16.79],[-28350.31,185195.05,-8660.21,0,0,5.63,16.79],[-12151.61,172763,-8660.21,0,0,5.63,16.79],[-17564.5,176917.23,-8660.21,0,0,5.63,16.79],[-1365.8,164485.2,-8660.21,0,0,5.63,16.79],[-6778.69,168639.44,-8660.21,0,0,5.63,16.79],[9420.01,156207.41,-8660.21,0,0,5.63,16.79],[4007.12,160361.66,-8660.21,0,0,5.63,16.79]],"SM_ZhuZi04":[[-4725.46,35505.06,-22840.58,0,0,0,7.57],[-10787.73,69364.13,-26072.59,0,0,0,7.57],[5914.76,92322.2,-27727.79,0,0,-2.85,7.57],[-8132.51,133691.66,-25333.54,0,0,0,7.57],[-10787.73,167563.45,-26072.59,0,0,0,7.57],[14145.23,189643.61,-27727.79,0,0,-2.85,7.57],[5676.85,35604.1,-19298.23,0,0,0,7.57]]};
+        const G_CLOUD_DATA = [[-60488,30485,-6891],[-69543,101074,-6497],[-44203,57784,-11919],[-40367,181361,-11100],[-72774,46233,-5950],[-38697,102739,-13675],[-39698,89473,-12885],[-70577,98761,-5236],[-11577,20968,-8495],[-53051,58630,-8507],[-40642,64330,-12371],[-66843,29599,-6531],[-42267,117846,-11547],[-48705,101066,-10442],[-49568,164044,-10240],[-63117,134433,-8260],[-38076,28385,-11647],[-63857,63654,-6041],[-47109,146434,-9770],[-65756,55139,-8019],[-66542,71700,-6777],[-52956,118478,-8090],[-46182,17829,-12025],[-67788,101975,-7923],[-70803,74705,-5456],[-77338,42162,-3855],[-58027,171653,-8908],[-47533,65320,-10544],[-78667,28819,-3940],[-38111,79744,-11381],[-61521,67721,-7865],[-44978,8419,-12345],[-41124,112318,-11020],[-49029,153857,-10355],[-47708,191223,-11575],[-74358,77017,-6039],[-60314,111328,-9280],[-38889,158582,-13395],[-64989,18268,-6906],[-47703,29096,-11841],[-37534,204645,-11568],[-69394,30885,-7637],[-68848,47398,-6965],[-38733,43230,-11517],[-73883,17288,-6479],[-44755,58277,-9765],[-39072,51918,-11078],[-63275,40026,-8652],[-62580,50923,-8502],[-42790,51176,-11430],[-53200,67074,-10203],[-77784,5305,-4549],[-49289,151485,-9630],[-55641,190089,-10384],[-53049,175399,-10797],[-66007,86973,-6133],[-43524,54104,-10704],[-47089,80200,-9276],[-77147,58303,-3943],[-66249,15265,-6270],[-64074,123106,-6906],[-46230,130502,-10026],[-82491,173482,-4353],[-80608,144984,-2786],[-86136,162263,-3370],[-81996,158965,-2667],[-81583,86139,-4564],[-63543,191917,-8720],[-84896,94419,-3594],[-64877,181148,-6025],[-67078,187838,-5643],[-66333,171825,-7252],[-84165,50795,-2514],[-75748,93340,-5363],[-86780,69595,-3190],[-68076,160090,-6347],[-81496,184704,-5170],[-74365,125927,-6324],[-76422,128279,-5182],[-84115,78938,-3427],[-80862,199222,-4110],[-90904,80324,-1891],[-65616,200893,-6966],[-89985,193926,-2506],[-79432,98348,-4836],[-75866,166627,-6073],[-61931,171435,-7013],[-72609,157634,-6801],[-71875,112376,-5185],[-58273,194004,-8954],[33192,192970,-12169],[7730,203303,-12045],[33449,124688,-14101],[10801,191961,-13088],[26777,124436,-13279],[-6388,188152,-11937],[33507,167310,-12751],[10471,124912,-12972],[21895,153701,-11353],[22500,104625,-11562],[15022,161372,-13835],[35953,8960,-12680],[24984,169114,-11649],[7515,207116,-12238],[36099,199031,-12898],[30088,181245,-11917],[34063,97969,-14080],[11051,106842,-13122],[32328,102022,-12597],[8259,135052,-12241],[35509,194710,-14040],[13807,131641,-13874],[11197,203041,-12423],[20679,92153,-13004],[27871,108479,-11429],[14985,203967,-12378],[13266,139994,-13118],[31890,156824,-12186],[23322,190977,-13804],[10228,202462,-13627],[24688,69232,-12568],[15203,188451,-11680],[36308,63837,-13728],[23747,206326,-12325],[-11699,198824,-13880],[19292,81164,-13558],[16263,207534,-12084],[12134,147131,-12981],[26013,138734,-11915],[3467,183045,-12574],[22092,188174,-13289],[36754,51819,-11973],[8574,153493,-12621],[30645,186737,-13304],[35201,106909,-13287],[23851,78648,-12722],[22179,167125,-13018],[31672,50760,-12471],[11814,143170,-13023],[-34351,27697,-12689],[21256,6485,-11218],[-11209,102614,-13130],[-33058,68810,-13097],[4235,51710,-11486],[1667,71992,-14085],[-3966,149901,-13357],[-23668,192455,-13715],[34580,536,-12641],[-12943,136305,-11375],[-36130,179558,-11779],[-21418,104295,-13669],[18684,43129,-13520],[10695,31096,-8981],[-29257,34978,-12891],[-11701,128995,-12722],[26688,37565,-12874],[-18284,68041,-12362],[-23972,53742,-12645],[1814,101171,-12335],[201,132976,-13340],[-109,27352,-13498],[-29618,131991,-13138],[-31326,166604,-13430],[-34201,156392,-13780],[7907,39106,-11793],[-799,83786,-12406],[-32996,124826,-11258],[-8568,119950,-13908],[-21707,89456,-11856],[-13206,108515,-12494],[-36360,147442,-14038],[-20090,125311,-11847],[-24228,206625,-11777],[-10235,116258,-12829],[-23368,114280,-13811],[22200,47657,-13027],[-23635,28632,-11561],[6881,87265,-13671],[-27647,86538,-13171],[-27256,69600,-11908],[-15893,60098,-11559],[-33724,193628,-11240],[-23819,76625,-8963],[-8552,8124,-13352],[-33069,127354,-12455],[-3921,91168,-13107],[-2588,125725,-11726],[886,134067,-13209],[-16436,43916,-12314],[-36058,34173,-12659],[-35376,181702,-11996],[-10988,50149,-11494],[-7678,38058,-12142],[6170,48239,-13554],[2380,25612,-12965],[-1435,118984,-13925],[-17755,71741,-12473],[-4099,83695,-13730],[-19460,121049,-12919],[6969,32893,-12803],[-6095,96087,-12934],[-32797,71243,-13184],[16730,11504,-12044],[-15199,103352,-12470],[-22466,192080,-13830],[-1313,99086,-12820],[-36871,185381,-12530],[-35361,7367,-11563],[-12880,169899,-12104],[-26283,114316,-12690],[26090,1625,-12107],[17352,62471,-13134],[-21607,101088,-12210],[-176,51561,-9890],[20254,20201,-13226],[-7315,38972,-11815],[-34410,153439,-12254],[-22890,195138,-13730],[-13532,44644,-13348],[-26577,28507,-12225],[-9095,57368,-12947],[-12337,52057,-12156],[-17948,33376,-13311],[-1354,31655,-13855],[7224,104273,-13627],[71511,107899,-7124],[72810,49857,-6532],[64593,101437,-7718],[73623,51559,-6660],[43201,18227,-12499],[82170,124002,-3823],[57687,6003,-8528],[66682,62334,-6222],[52208,65898,-9726],[62883,20746,-6423],[71610,168502,-4851],[67137,65582,-5919],[75239,110216,-6260],[56903,75679,-8625],[82052,-1573,-3188],[70423,94955,-6042],[72738,131874,-4846],[59108,77307,-9114],[58787,93678,-7197],[89295,11262,-3815],[61955,52480,-7402],[63052,96387,-8604],[83699,64347,-1973],[85844,204875,-1584],[70186,69563,-5121],[85904,171221,-3911],[49980,36179,-11089],[70919,173793,-6153],[83566,136606,-3045],[87411,5029,-3805],[76812,2662,-5781],[58348,981,-7688],[75660,9705,-5237],[80207,24260,-3198],[46531,30774,-10717],[68274,69517,-7041],[88296,143630,-1557],[72079,161115,-4719],[74672,130453,-4801],[77907,145325,-3231],[42865,10652,-10540],[65980,79478,-6033],[82617,120627,-2974],[89756,50612,-1160],[91044,77888,-2531],[90599,109670,-2723],[90480,120469,-3155],[71374,180298,-4948],[65874,33575,-7684],[62644,90847,-8991],[81937,37122,-3388],[45170,792,-12093],[77392,110210,-5039],[79862,102198,-5329],[62562,12949,-7418],[89090,112020,-2144],[56784,48000,-9931],[69572,57019,-6274],[80564,113250,-4022],[86451,38681,-2110],[75967,80977,-4594],[42462,-2206,-10774],[66021,180876,-6846],[44039,115115,-9916],[65524,173955,-6130],[49753,78332,-9069],[63932,150057,-8121],[37629,99027,-13346],[43775,156399,-9922],[36577,23632,-7748],[45698,147819,-11227],[49266,175813,-8835],[50143,169308,-10517],[45726,195605,-10527],[54675,149483,-7878],[69604,181135,-6380],[44948,176907,-11098],[39167,61123,-10931],[44173,143496,-10093],[62606,167094,-8288],[52248,102230,-8862],[46776,194147,-11945],[40302,56987,-10790],[59001,126306,-9596],[55810,206691,-8222],[40529,200412,-11613],[54146,113944,-9723],[46015,133397,-10048],[57505,140904,-9929],[46285,117699,-9400],[58557,207930,-8139],[67890,177279,-7289],[61931,188275,-7541],[53602,108660,-9249],[60339,194335,-8446],[60802,180458,-7049],[53743,182143,-10775],[7155,13400,-9534],[-7615,110930,-9485]];
+        const G_POLAR_DATA = [
+            [39188.92, 26406.37, 41612.57, 1.57, -0.85, 0],
+            [38546.52, 180333.61, 43235.39, 1.57, -0.85, 0],
+            [47130.91, 101574.17, 48893.04, 1.57, -0.85, 0]
+        ];
+
+        // ---------- 着色器（移植自 src/shader） ----------
+        const G_NOISE3D = `
+        const float F3 = 0.3333333;
+        const float G3 = 0.1666667;
+        vec3 random3(vec3 c) {
+            float j = 4096.0*sin(dot(c,vec3(17.0, 59.4, 15.0)));
+            vec3 r;
+            r.z = fract(512.0*j); j *= .125;
+            r.x = fract(512.0*j); j *= .125;
+            r.y = fract(512.0*j);
+            return r-0.5;
+        }
+        float noise3d(vec3 p) {
+            vec3 s = floor(p + dot(p, vec3(F3)));
+            vec3 x = p - s + dot(s, vec3(G3));
+            vec3 e = step(vec3(0.0), x - x.yzx);
+            vec3 i1 = e*(1.0 - e.zxy);
+            vec3 i2 = 1.0 - e.zxy*(1.0 - e);
+            vec3 x1 = x - i1 + G3;
+            vec3 x2 = x - i2 + 2.0*G3;
+            vec3 x3 = x - 1.0 + 3.0*G3;
+            vec4 w, d;
+            w.x = dot(x, x); w.y = dot(x1, x1); w.z = dot(x2, x2); w.w = dot(x3, x3);
+            w = max(0.6 - w, 0.0);
+            d.x = dot(random3(s), x); d.y = dot(random3(s + i1), x1);
+            d.z = dot(random3(s + i2), x2); d.w = dot(random3(s + 1.0), x3);
+            w *= w; w *= w; d *= w;
+            return dot(d, vec4(52.0));
+        }`;
+
+        // 通用顶点着色器（移植自 simple.vert：UV 翻转 + 实例化支持）
+        const G_SIMPLE_VERT = `
+        varying vec2 vUv;
+        varying vec3 vPositionW;
+        void main() {
+            vUv = uv;
+            vUv.y = 1.0 - vUv.y;
+            vec3 p = position;
+            #ifdef USE_INSTANCING
+                p = vec3(instanceMatrix * vec4(position, 1.));
+            #endif
+            vPositionW = (modelMatrix * vec4(p, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }`;
+
+        // 云海：每实例从 2x4 图集随机取一格（移植自 cloud.vert）
+        const G_CLOUD_VERT = `
+        varying vec2 vUv;
+        float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
+        void main() {
+            vec3 p = position;
+            vec2 cuv = uv;
+            #ifdef USE_INSTANCING
+                p = vec3(instanceMatrix * vec4(position, 1.));
+                vec3 ip = vec3(instanceMatrix * vec4(vec3(0.), 1.));
+                vec2 wh = vec2(2., 4.);
+                float rn = ceil(random(ip.xy) * wh.x * wh.y);
+                vec2 cell = vec2(1.) / wh;
+                cuv = uv / wh + vec2(cell.x * mod(rn, wh.x), cell.y * (ceil(rn / wh.x) - 1.));
+            #endif
+            vUv = cuv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }`;
+
+        // 云海配色：蓝(#00a2f0)到白(#f0f0f5)按掩码过渡（移植自 cloud.frag；
+        // mask 乘 alpha 以同时兼容真实贴图 Tex_0062 与程序化兜底贴图）
+        const G_CLOUD_FRAG = `
+        varying vec2 vUv;
+        uniform sampler2D cloudTexture;
+        uniform vec3 color_1;
+        uniform vec3 color_2;
+        void main() {
+            vec4 col = texture2D(cloudTexture, vUv);
+            float mask = col.r * col.a;
+            vec3 c = mix(color_1, color_2, pow(mask, 0.6));
+            gl_FragColor = vec4(c, col.a);
+        }`;
+
+        // 远景大云（移植自 BigCloud.frag / BigCloudBG.frag，ACES逆变换以等效颜色替代）
+        const G_BIGCLOUD_FRAG = `
+        varying vec2 vUv;
+        uniform sampler2D cloudTexture;
+        void main() {
+            vec4 col = texture2D(cloudTexture, vUv);
+            vec3 col_r = mix(vec3(23., 145., 250.)/255., vec3(0.93), vec3(pow(col.r, 0.4)));
+            gl_FragColor = vec4(col_r, col.a);
+        }`;
+        const G_BIGCLOUDBG_FRAG = `
+        varying vec2 vUv;
+        uniform sampler2D cloudTexture;
+        void main() {
+            vec4 col = texture2D(cloudTexture, vUv);
+            gl_FragColor = vec4(vec3(0.9)*2., col.r*0.4);
+        }`;
+
+        // 极光光幕（移植自 polarLight.frag）
+        const G_POLAR_FRAG = `
+        varying vec2 vUv;
+        varying vec3 vPositionW;
+        uniform sampler2D lightTexture;
+        uniform float time;
+        void main() {
+            float mask = 1.5*texture2D(lightTexture, vUv+vec2(time*0.015,0.)).r;
+            mask += texture2D(lightTexture, vUv*vec2(0.4,1.)+vec2(time*-0.0075,0.)).r;
+            vec4 col = vec4(vec3(1.8), mask);
+            float distanceToCamera = distance(cameraPosition.xyz, vPositionW);
+            col.a *= smoothstep(200., 1000., distanceToCamera);
+            col.a *= smoothstep(0.0, 0.5, vUv.y);
+            col.a *= smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
+            gl_FragColor = col;
+        }`;
+
+        // 雾气（移植自 hashFog.frag，噪声原样保留）
+        const G_HASHFOG_FRAG = `
+        varying vec2 vUv;
+        varying vec3 vPositionW;
+        uniform float time;
+        ` + G_NOISE3D + `
+        void main() {
+            float f = 0.0;
+            f = clamp(noise3d(vPositionW*vec3(0.012,0.012,0.)+vec3(time*0.25))+0.2,0.,1.);
+            f += clamp(noise3d(vPositionW*vec3(0.004,0.004,0.)-vec3(time*0.15))+0.1,0.,1.);
+            f = clamp(f,0.,1.);
+            f *= (1.-smoothstep(-5.,45.,vPositionW.y));
+            f *= (smoothstep(-200.,-35.,vPositionW.y));
+            f *= (smoothstep(0.,40.,vPositionW.x)+(1.-smoothstep(-40.,-0.,vPositionW.x)));
+            gl_FragColor = vec4(vec3(1.)*3., f*0.3);
+        }`;
+
+        // ---------- 程序化贴图（替代 Tex_0062/0071/0075 等） ----------
+        function gMakeCloudAtlas() {
+            const cv = document.createElement('canvas'); cv.width = 512; cv.height = 1024;
+            const ctx = cv.getContext('2d');
+            const CW = 256, CH = 256;
+            for (let row = 0; row < 4; row++) for (let col = 0; col < 2; col++) {
+                const ox = col * CW, oy = row * CH;
+                const n = 16 + Math.floor(Math.random() * 10);
+                for (let i = 0; i < n; i++) {
+                    const cx = ox + CW * (0.2 + Math.random() * 0.6);
+                    const cy = oy + CH * (0.42 + Math.random() * 0.22);
+                    const r = 18 + Math.random() * 42;
+                    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                    g.addColorStop(0, 'rgba(255,255,255,0.55)');
+                    g.addColorStop(0.6, 'rgba(255,255,255,0.25)');
+                    g.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+                }
+            }
+            return new THREE.CanvasTexture(cv);
+        }
+
+        function gMakeBigCloudTexture() {
+            const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
+            const ctx = cv.getContext('2d');
+            for (let i = 0; i < 70; i++) {
+                const cx = 40 + Math.random() * 432;
+                const cy = 130 + Math.random() * 90;
+                const r = 25 + Math.random() * 55;
+                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                g.addColorStop(0, 'rgba(255,255,255,0.5)');
+                g.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+            }
+            return new THREE.CanvasTexture(cv);
+        }
+
+        function gMakeLightTexture() {
+            const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 512, 256);
+            for (let i = 0; i < 70; i++) {
+                const x = Math.random() * 512, w = 1 + Math.random() * 10;
+                const a = 0.05 + Math.random() * 0.22;
+                const grd = ctx.createLinearGradient(0, 0, 0, 256);
+                grd.addColorStop(0, 'rgba(255,255,255,0)');
+                grd.addColorStop(0.5, 'rgba(255,255,255,' + a.toFixed(2) + ')');
+                grd.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grd;
+                ctx.fillRect(x - w / 2, 0, w, 256);
+            }
+            const t = new THREE.CanvasTexture(cv);
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            return t;
+        }
+
+        function gMakeStarSprite() {
+            const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+            const ctx = cv.getContext('2d');
+            const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.25, 'rgba(255,255,255,0.5)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(cv);
+        }
+
+        // 渐变天空（移植自 gradientBackground.ts：0x001c54 → 0x023fa1 → 0x26a8ff）
+        function gMakeBackground() {
+            const cv = document.createElement('canvas'); cv.width = 2; cv.height = 512;
+            const ctx = cv.getContext('2d');
+            const grd = ctx.createLinearGradient(0, 0, 0, 512);
+            grd.addColorStop(0.0, '#001c54');
+            grd.addColorStop(0.2, '#023fa1');
+            grd.addColorStop(0.6, '#26a8ff');
+            grd.addColorStop(1.0, '#26a8ff');
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, 2, 512);
+            return new THREE.CanvasTexture(cv);
+        }
+
+        // ---------- 贴图加载（真实素材优先，失败时程序化兜底） ----------
+        function gLoadTexture(file, applyFallback) {
+            return gTexLoader.load(G_TEX_DIR + file, undefined, undefined, () => {
+                console.warn('[原神场景] 贴图加载失败，使用程序化兜底: ' + file);
+                applyFallback();
+            });
+        }
+
+        // ---------- 场景搭建 ----------
+        function buildGenshinScene() {
+            if (gReady) return;
+            gTexLoader = new THREE.TextureLoader();
+            gGLTF = (typeof THREE.GLTFLoader === 'function') ? new THREE.GLTFLoader() : null;
+            // 部分 GLB（SM_Qiao/SM_Light/SM_BigCloud/WHITE_PLANE等）为 Draco 压缩，需挂解码器
+            if (gGLTF && typeof THREE.DRACOLoader === 'function') {
+                const draco = new THREE.DRACOLoader();
+                draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+                gGLTF.setDRACOLoader(draco);
+            }
+
+            gScene = new THREE.Scene();
+            gScene.background = gMakeBackground();
+            gScene.fog = new THREE.Fog(0x389af2, 5000, 10000);   // 移植自 Game.ts
+            gCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 5, 100000);
+            gCamera.rotation.x = 5.5 * Math.PI / 180;            // 原相机仰角
+            gCenter.set(0, 0, 0);
+            gCamState = 'fly';
+
+            // 灯光（AmbientLightComponent 0x0f6eff / DirectionalLightComponent 0xff6222）
+            gScene.add(new THREE.AmbientLight(0x0f6eff, 2.5));
+            gDirLight = new THREE.DirectionalLight(0xff6222, 2.5);
+            gScene.add(gDirLight);
+            gScene.add(gDirLight.target);
+
+            gBuildClouds();
+            gBuildBigClouds();
+            gBuildPolarLights();
+            gBuildHashFog();
+            gBuildStars();
+            gBuildColumns();
+            gBuildRoad();
+            gBuildDoor();
+
+            gComposer = new THREE.EffectComposer(renderer);
+            gComposer.addPass(new THREE.RenderPass(gScene, gCamera));
+            gComposer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.4, 0.9));
+            gComposer.setSize(window.innerWidth, window.innerHeight);
+            gReady = true;
+        }
+
+        function gBuildClouds() {
+            const mat = new THREE.ShaderMaterial({
+                uniforms: {
+                    cloudTexture: { value: null },
+                    color_1: { value: new THREE.Color('#00a2f0') },
+                    color_2: { value: new THREE.Color('#f0f0f5') }
+                },
+                vertexShader: G_CLOUD_VERT, fragmentShader: G_CLOUD_FRAG,
+                transparent: true, depthWrite: false
+            });
+            // 云海贴图 Tex_0062（2x4 图集，与 cloud.vert 的随机取格逻辑对应）
+            mat.uniforms.cloudTexture.value = gLoadTexture('Tex_0062.png', () => {
+                mat.uniforms.cloudTexture.value = gMakeCloudAtlas();
+            });
+            // 云海摆位移植自 CloudList（原始坐标，转换规则同 Cloud.ts）
+            gCloudPos = G_CLOUD_DATA.map(d => new THREE.Vector3(d[0] * 0.1, d[2] * 0.1, -d[1] * 0.1));
+            gCloudInst = new THREE.InstancedMesh(new THREE.PlaneGeometry(3000, 1500), mat, gCloudPos.length);
+            gUpdateCloudMatrices();
+            gScene.add(gCloudInst);
+        }
+
+        function gUpdateCloudMatrices() {
+            for (let i = 0; i < gCloudPos.length; i++) {
+                _gDummy.position.copy(gCloudPos[i]);
+                _gDummy.rotation.set(0, 0, 0);
+                _gDummy.scale.set(1, 1, 1);
+                _gDummy.updateMatrix();
+                gCloudInst.setMatrixAt(i, _gDummy.matrix);
+            }
+            gCloudInst.instanceMatrix.needsUpdate = true;
+        }
+
+        function gBuildBigClouds() {
+            // 远景大云：加载 SM_BigCloud.glb，按 BigCloud.ts 处理（×0.1、Plane011 用 M_BigCloud，其余 M_BigCloudBG）
+            if (!gGLTF) { gBuildBigCloudsFallback(); return; }
+            gGLTF.load(G_ASSET_DIR + 'SM_BigCloud.glb', (gltf) => {
+                const v = gltf.scene;
+                for (const c of v.children) {
+                    c.position.multiplyScalar(0.1);
+                    c.scale.multiplyScalar(0.1);
+                }
+                const matBig = new THREE.ShaderMaterial({
+                    uniforms: { cloudTexture: { value: null } },
+                    vertexShader: G_SIMPLE_VERT, fragmentShader: G_BIGCLOUD_FRAG,
+                    transparent: true, depthWrite: false
+                });
+                matBig.uniforms.cloudTexture.value = gLoadTexture('Tex_0063.png', () => {
+                    matBig.uniforms.cloudTexture.value = gMakeBigCloudTexture();
+                });
+                const matBG = new THREE.ShaderMaterial({
+                    uniforms: { cloudTexture: { value: null } },
+                    vertexShader: G_SIMPLE_VERT, fragmentShader: G_BIGCLOUDBG_FRAG,
+                    transparent: true, depthWrite: false
+                });
+                matBG.uniforms.cloudTexture.value = gLoadTexture('Tex_0067b.png', () => {
+                    matBG.uniforms.cloudTexture.value = gMakeBigCloudTexture();
+                });
+                v.traverse((mesh) => {
+                    if (mesh.isMesh) {
+                        mesh.renderOrder = -1;
+                        mesh.material = (mesh.name === 'Plane011') ? matBig : matBG;
+                    }
+                });
+                gBigCloudGroup = v;
+                gScene.add(v);
+            }, undefined, () => {
+                console.warn('[原神场景] SM_BigCloud.glb 加载失败，使用程序化兜底');
+                gBuildBigCloudsFallback();
+            });
+        }
+
+        function gBuildBigCloudsFallback() {
+            // 程序化兜底：位置移植自 BigCloudList（×0.1）：[x, y, z, scale]
+            const list = [
+                [-8838, 2077, -27796, 13117],
+                [5817, 1288, -27480, 11382],
+                [-17858, 4973, -29618, 13117],
+                [-7010, 6376, -27419, 7135],
+                [15878, 1149, -27351, 11382],
+                [14685, 4090, -29349, 11382],
+                [6621, 5367, -30591, 16620]
+            ];
+            gBigCloudGroup = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({
+                map: gMakeBigCloudTexture(), color: 0xeaf4ff,
+                transparent: true, depthWrite: false, fog: false
+            });
+            for (const d of list) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.45), mat);
+                m.position.set(d[0], d[1] * 0.55, d[2]);
+                m.scale.set(d[3] * 2, d[3] * 2, 1);
+                m.renderOrder = -1;
+                gBigCloudGroup.add(m);
+            }
+            gScene.add(gBigCloudGroup);
+        }
+
+        function gBuildPolarLights() {
+            gPolarMat = new THREE.ShaderMaterial({
+                uniforms: { lightTexture: { value: null }, time: { value: 123 } },
+                vertexShader: G_SIMPLE_VERT, fragmentShader: G_POLAR_FRAG,
+                transparent: true, depthWrite: false, side: THREE.DoubleSide
+            });
+            // 极光贴图 Tex_0071（水平重复滚动）
+            const tex = gLoadTexture('Tex_0071.png', () => {
+                gPolarMat.uniforms.lightTexture.value = gMakeLightTexture();
+            });
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            gPolarMat.uniforms.lightTexture.value = tex;
+
+            // 变换移植自 PolarLightList + PolarLight.ts（位置(L0,L2,-L1)×0.1，Euler(R0,-R1,R2)，缩放0.1）
+            gPolarTransforms = G_POLAR_DATA.map(d => ({
+                position: new THREE.Vector3(d[0] * 0.1, d[2] * 0.1, -d[1] * 0.1),
+                quaternion: new THREE.Quaternion().setFromEuler(new THREE.Euler(d[3], -d[4], d[5])),
+                scale: new THREE.Vector3(0.1, 0.1, 0.1)
+            }));
+
+            const useFallbackPlanes = () => {
+                const geo = new THREE.PlaneGeometry(42000, 15000);
+                for (const t of gPolarTransforms) {
+                    const m = new THREE.Mesh(geo, gPolarMat);
+                    m.position.copy(t.position);
+                    m.quaternion.copy(t.quaternion);
+                    m.scale.copy(t.scale);
+                    gPolarMeshes.push(m); gScene.add(m);
+                }
+            };
+            if (!gGLTF) { useFallbackPlanes(); return; }
+            // 光幕网格 SM_Light.glb，按 PolarLight.ts 创建实例组
+            gGLTF.load(G_ASSET_DIR + 'SM_Light.glb', (gltf) => {
+                let geo = null;
+                gltf.scene.traverse((mesh) => { if (mesh.isMesh && !geo) geo = mesh.geometry; });
+                if (!geo) { useFallbackPlanes(); return; }
+                gPolarInst = new THREE.InstancedMesh(geo, gPolarMat, gPolarTransforms.length);
+                gUpdatePolarMatrices();
+                gScene.add(gPolarInst);
+            }, undefined, () => {
+                console.warn('[原神场景] SM_Light.glb 加载失败，使用平面光幕兜底');
+                useFallbackPlanes();
+            });
+        }
+
+        function gUpdatePolarMatrices() {
+            if (!gPolarInst) return;
+            const m4 = new THREE.Matrix4();
+            for (let i = 0; i < gPolarTransforms.length; i++) {
+                const t = gPolarTransforms[i];
+                m4.compose(t.position, t.quaternion, t.scale);
+                gPolarInst.setMatrixAt(i, m4);
+            }
+            gPolarInst.instanceMatrix.needsUpdate = true;
+        }
+
+        function gBuildHashFog() {
+            gHashFogMat = new THREE.ShaderMaterial({
+                uniforms: { time: { value: 123 } },
+                vertexShader: G_SIMPLE_VERT, fragmentShader: G_HASHFOG_FRAG,
+                transparent: true, depthWrite: false
+            });
+            gHashFogMesh = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), gHashFogMat);
+            gScene.add(gHashFogMesh);
+        }
+
+        function gBuildStars() {
+            const positions = [], colors = [];
+            for (let i = 0; i < 400; i++) {
+                positions.push((Math.random() - 0.5) * 2500, (Math.random() - 0.5) * 2500, (Math.random() - 0.5) * 1000);
+                colors.push(Math.max(0, Math.random() * 3 - 0.2), Math.random() * 3 + 0.5, Math.random() * 3 + 1);
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const mat = new THREE.PointsMaterial({
+                size: 90, transparent: true, vertexColors: true, depthWrite: false,
+                map: gMakeStarSprite(), blending: THREE.AdditiveBlending, opacity: 0.8
+            });
+            gStars = new THREE.Points(geo, mat);
+            gScene.add(gStars);
+        }
+
+        function gBuildColumns() {
+            // 石柱/石桥：加载 SM_Qiao01-04 / SM_ZhuZi01-04，按 ColumnList 数据创建实例组（移植自 Column.ts）
+            if (!gGLTF) { gBuildPillarsFallback(); return; }
+            let fellBack = false;
+            for (const name of Object.keys(G_COLUMN_DATA)) {
+                gGLTF.load(G_ASSET_DIR + name + '.glb', (gltf) => {
+                    const list = G_COLUMN_DATA[name];
+                    const set = { list: list, instances: [] };
+                    gltf.scene.traverse((mesh) => {
+                        if (mesh.isMesh) {
+                            const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, list.length);
+                            gSetColumnMatrices(im, list);
+                            gScene.add(im);
+                            set.instances.push(im);
+                        }
+                    });
+                    gColumnSets.push(set);
+                }, undefined, () => {
+                    console.warn('[原神场景] ' + name + '.glb 加载失败');
+                    if (!fellBack) { fellBack = true; gBuildPillarsFallback(); }
+                });
+            }
+        }
+
+        function gSetColumnMatrices(im, list) {
+            // 变换规则移植自 Column.ts：位置(L0,L2,-L1)×0.1，Euler(R0,R2,R1)，缩放×0.1
+            for (let j = 0; j < list.length; j++) {
+                const d = list[j];
+                _gDummy.position.set(d[0] * 0.1, d[2] * 0.1, -d[1] * 0.1);
+                _gDummy.rotation.set(d[3], d[5], d[4]);
+                _gDummy.scale.set(d[6] * 0.1, d[6] * 0.1, d[6] * 0.1);
+                _gDummy.updateMatrix();
+                im.setMatrixAt(j, _gDummy.matrix);
+            }
+            im.instanceMatrix.needsUpdate = true;
+        }
+
+        function gBuildPillarsFallback() {
+            if (gPillars.length) return;
+            const mat = new THREE.MeshLambertMaterial({ color: 0x8aa0d8, emissive: 0x16244e, emissiveIntensity: 0.6 });
+            const capMat = new THREE.MeshLambertMaterial({ color: 0xa8bce8, emissive: 0x1a2a58, emissiveIntensity: 0.5 });
+            for (let i = 0; i < 26; i++) {
+                const h = 900 + Math.random() * 1500;
+                const r = 60 + Math.random() * 110;
+                const g = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 1.25, h, 7), mat);
+                g.add(body);
+                const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.05, r * 0.85, h * 0.06, 7), capMat);
+                cap.position.y = h / 2 + h * 0.03;
+                g.add(cap);
+                const side = i % 2 === 0 ? -1 : 1;
+                g.position.set(
+                    side * (450 + Math.random() * 3800),
+                    -(h / 2) - 120 - Math.random() * 500,
+                    -(i / 26) * G_PILLAR_SPAN - Math.random() * 300
+                );
+                gPillars.push(g); gScene.add(g);
+            }
+        }
+
+        function gBuildRoad() {
+            // 悬空石路：加载 SM_Road.glb，按 Road.ts 处理（×0.1、减偏移(0,34,200)、克隆延长一倍）
+            if (!gGLTF) { gBuildRoadFallback(); return; }
+            gGLTF.load(G_ASSET_DIR + 'SM_Road.glb', (gltf) => {
+                const v = gltf.scene;
+                const offset = new THREE.Vector3(0, 34, 200);
+                const baseLen = 212.4027;
+                for (const c of v.children) {
+                    c.scale.multiplyScalar(0.1);
+                    c.position.multiplyScalar(0.1);
+                    c.position.sub(offset);
+                }
+                const n = v.children.length;
+                const clones = [];
+                for (let j = 0; j < n; j++) {
+                    const cl = v.children[j].clone();
+                    cl.position.z -= baseLen;
+                    clones.push(cl);
+                }
+                clones.forEach(c => v.add(c));
+                gRoadGLB = {
+                    obj: v,
+                    zLength: baseLen * 2,
+                    homes: v.children.map(c => c.position.clone())
+                };
+                gScene.add(v);
+            }, undefined, () => {
+                console.warn('[原神场景] SM_Road.glb 加载失败，使用程序化石板路兜底');
+                gBuildRoadFallback();
+            });
+        }
+
+        function gBuildRoadFallback() {
+            if (gRoadSlabs.length) return;
+            const slabGeo = new THREE.BoxGeometry(46, 8, G_ROAD_STEP - 4);
+            const slabMat = new THREE.MeshLambertMaterial({ color: 0xe8ddd0 });
+            const edgeMat = new THREE.MeshLambertMaterial({ color: 0xc9b9a4 });
+            for (let i = 0; i < G_ROAD_COUNT; i++) {
+                const g = new THREE.Group();
+                g.add(new THREE.Mesh(slabGeo, slabMat));
+                if (i % 3 === 0) {
+                    const e1 = new THREE.Mesh(new THREE.BoxGeometry(5, 7, 9), edgeMat);
+                    e1.position.set(-24, 5, 0); g.add(e1);
+                    const e2 = e1.clone(); e2.position.x = 24; g.add(e2);
+                }
+                g.position.set(0, G_ROAD_Y, -i * G_ROAD_STEP + 60);
+                gRoadSlabs.push(g); gScene.add(g);
+            }
+        }
+
+        function gBuildDoor() {
+            // 终点大门：DOOR.glb（含升起动画）+ WHITE_PLANE.glb（发光白幕），移植自 Road.ts._showDoor/_creatBackground
+            gDoor = new THREE.Group();
+            gDoor.position.set(0, 0, G_DOOR_Z);
+            gScene.add(gDoor);
+            if (!gGLTF) { gBuildDoorFallback(); return; }
+            gGLTF.load(G_ASSET_DIR + 'DOOR.glb', (gltf) => {
+                const v = gltf.scene;
+                v.scale.set(0.1, 0.1, 0.04);   // 原版缩放
+                v.position.set(0, -34, -14);   // 原版门相对道路的偏移
+                v.traverse((mesh) => {
+                    if (mesh.isMesh && mesh.material) {
+                        if (mesh.material.color) mesh.material.color.set('#454545'); // 原版门体着色
+                        if ('metalness' in mesh.material) mesh.material.metalness = 0.15;
+                    }
+                });
+                gDoor.add(v);
+                gDoorMixer = new THREE.AnimationMixer(v);
+                for (const clip of gltf.animations) {
+                    const action = gDoorMixer.clipAction(clip);
+                    action.setLoop(THREE.LoopOnce, 1);
+                    action.clampWhenFinished = true;
+                    action.play();
+                }
+            }, undefined, () => {
+                console.warn('[原神场景] DOOR.glb 加载失败，使用程序化大门兜底');
+                gBuildDoorFallback();
+            });
+            gGLTF.load(G_ASSET_DIR + 'WHITE_PLANE.glb', (gltf) => {
+                const v = gltf.scene;
+                v.scale.set(0.1, 0.1, 0.1);
+                v.traverse((mesh) => {
+                    if (mesh.isMesh) {
+                        mesh.material = new THREE.MeshBasicMaterial({
+                            color: new THREE.Color('#ffffff').multiplyScalar(3), fog: false
+                        });
+                    }
+                });
+                v.position.set(0, -34, -14);
+                v.visible = false;             // 门升起动画完成后再显示（原版 doorCreate 时机）
+                gDoor.add(v);
+                gDoorBg = v;
+            }, undefined, () => {});
+        }
+
+        function gBuildDoorFallback() {
+            const frameMat = new THREE.MeshLambertMaterial({ color: 0x454545, emissive: 0x331408, emissiveIntensity: 0.8 });
+            const trimMat = new THREE.MeshBasicMaterial({ color: 0xffd28a });
+            const base = -34;
+            const pl = new THREE.Mesh(new THREE.BoxGeometry(26, 330, 26), frameMat);
+            pl.position.set(-100, base + 165, 0); gDoor.add(pl);
+            const pr = pl.clone(); pr.position.x = 100; gDoor.add(pr);
+            const top = new THREE.Mesh(new THREE.BoxGeometry(260, 28, 30), frameMat);
+            top.position.set(0, base + 344, 0); gDoor.add(top);
+            const top2 = new THREE.Mesh(new THREE.BoxGeometry(210, 20, 24), frameMat);
+            top2.position.set(0, base + 372, 0); gDoor.add(top2);
+            const t1 = new THREE.Mesh(new THREE.BoxGeometry(264, 4, 32), trimMat);
+            t1.position.set(0, base + 330, 0); gDoor.add(t1);
+            const t2 = new THREE.Mesh(new THREE.BoxGeometry(6, 330, 6), trimMat);
+            t2.position.set(-86, base + 165, 8); gDoor.add(t2);
+            const t3 = t2.clone(); t3.position.x = 86; gDoor.add(t3);
+            // 门内发光白面（对应 WHITE_PLANE，bloom 后呈圣光效果）
+            const glow = new THREE.Mesh(
+                new THREE.PlaneGeometry(174, 330),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })
+            );
+            glow.position.set(0, base + 165, -2);
+            gDoor.add(glow);
+            // 门后白色巨幕：穿门瞬间整个画面变白（平时隐藏）
+            gDoorBg = new THREE.Mesh(
+                new THREE.PlaneGeometry(2600, 1600),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })
+            );
+            gDoorBg.position.set(0, base + 400, -260);
+            gDoorBg.visible = false;
+            gDoor.add(gDoorBg);
+        }
+
+        // ---------- 每帧更新（移植各组件的 update 逻辑） ----------
+        function updateGenshinScene(dt, now) {
+            // 前进相机（ForwardCamera）：接近大门时减速停在门前，等待积分到100%
+            if (gCamState === 'fly') {
+                gCenter.z -= G_SPEED * dt;
+                if (gCenter.z <= G_DOOR_Z + 950) {
+                    gCamState = 'stop';
+                    gsap.to(gCenter, { z: G_DOOR_Z + 235, duration: 4.5, ease: 'power2.out' });
+                }
+            }
+            gCamera.position.set(gCenter.x, gCenter.y + Math.sin(now * 0.0008) * 3, gCenter.z);
+
+            // 云海循环（Cloud.update）
+            let cloudDirty = false;
+            for (const p of gCloudPos) {
+                if (p.z > gCenter.z + 800) { p.z -= G_SPAN; cloudDirty = true; }
+            }
+            if (cloudDirty) gUpdateCloudMatrices();
+
+            // 极光（PolarLight.update）
+            gPolarMat.uniforms.time.value += dt;
+            if (gPolarInst) {
+                let polarDirty = false;
+                for (const t of gPolarTransforms) {
+                    if (t.position.z > gCenter.z + 400) { t.position.z -= G_SPAN; polarDirty = true; }
+                }
+                if (polarDirty) gUpdatePolarMatrices();
+            }
+            for (const m of gPolarMeshes) {
+                if (m.position.z > gCenter.z + 400) m.position.z -= G_SPAN;
+            }
+
+            // 雾气（HashFog.update）
+            gHashFogMat.uniforms.time.value += dt;
+            gHashFogMesh.position.set(gCenter.x, 0, gCenter.z - 400);
+
+            // 远景大云与星屑跟随相机（BigCloud.update / starParticle.update）
+            if (gBigCloudGroup) gBigCloudGroup.position.copy(gCenter);
+            gStars.position.set(0, 750, gCenter.z - 1600);
+
+            // 石柱/石桥循环（Column.update：超出相机后方则前移一个循环长度）
+            for (const set of gColumnSets) {
+                let dirty = false;
+                for (const d of set.list) {
+                    if (-d[1] * 0.1 > gCenter.z + 2000) { d[1] += G_SPAN_RAW; dirty = true; }
+                }
+                if (dirty) set.instances.forEach(im => gSetColumnMatrices(im, set.list));
+            }
+            for (const p of gPillars) {
+                if (p.position.z > gCenter.z + 600) p.position.z -= G_PILLAR_SPAN;
+            }
+
+            // 道路循环 + 从下方弹起入场（Road.update 的 Back.Out 动画）
+            if (gRoadGLB) {
+                for (let i = 0; i < gRoadGLB.obj.children.length; i++) {
+                    const c = gRoadGLB.obj.children[i];
+                    if (c.position.z > gCenter.z + 40) {
+                        c.position.z -= gRoadGLB.zLength;
+                        gRoadGLB.homes[i].z -= gRoadGLB.zLength;
+                        const home = gRoadGLB.homes[i];
+                        c.position.y = home.y - 70;
+                        gsap.killTweensOf(c.position);
+                        gsap.to(c.position, { y: home.y, duration: 2, ease: 'back.out(1.2)' });
+                    }
+                }
+            }
+            for (const s of gRoadSlabs) {
+                if (s.position.z > gCenter.z + 90) {
+                    s.position.z -= G_ROAD_COUNT * G_ROAD_STEP;
+                    s.position.y = G_ROAD_Y - 70;
+                    gsap.killTweensOf(s.position);
+                    gsap.to(s.position, { y: G_ROAD_Y, duration: 1.6, ease: 'back.out(1.2)' });
+                }
+            }
+
+            // 大门升起动画（Road.ts：动画到1.4583s时定格并显示白幕，开门时1.6倍速继续）
+            if (gDoorMixer) {
+                if (gDoorMixer.time < 1.4583) {
+                    gDoorMixer.update(dt);
+                    if (gDoorMixer.time >= 1.4583 && gDoorBg) gDoorBg.visible = true;
+                } else if (gDoorOpening) {
+                    gDoorMixer.update(dt * 1.6);
+                }
+            }
+
+            // 平行光跟随（DirectionalLightComponent.update）
+            gDirLight.position.set(gCenter.x + 10000, gCenter.y + 8657, gCenter.z + 6000);
+            gDirLight.target.position.copy(gCenter);
+        }
+
+        // 合成渲染：先渲染原神场景（含bloom），再清除深度、叠加渲染跑酷玩法层（角色/障碍/金币）
+        function renderGenshinComposite(drawRunnerLayer) {
+            gComposer.render();
+            if (drawRunnerLayer) {
+                renderer.autoClear = false;
+                renderer.clearDepth();
+                renderer.render(scene, camera);
+                renderer.autoClear = true;
+            }
+        }
+
+        // 隐藏跑酷自身环境（天空球/地面/车道线/装饰物），避免遮挡原神场景；
+        // 角色、障碍物、金币、粒子保留，继续正常玩法
+        function gHideRunnerEnvironment() {
+            if (skyMesh) skyMesh.visible = false;
+            if (scene.fog) { scene.fog.near = 99999; scene.fog.far = 100000; } // 雾推到无穷远，物体不再被雾色染色
+            groundSegments.forEach(g => { g.visible = false; });
+            Object.keys(laneSegments).forEach(k => laneSegments[k].forEach(s => { s.visible = false; }));
+            decorations.forEach(d => { d.visible = false; });
+        }
+
+        function enterGenshinScene() {
+            if (genshinActive || genshinEntering) return;
+            genshinEntering = true;
+            console.log('[原神场景] 专注力积分达到90%，切入场景（跑酷玩法继续）');
+
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:fixed;inset:0;z-index:900;pointer-events:none;background:#fff;opacity:0;';
+            document.body.appendChild(flash);
+            gsap.to(flash, {
+                opacity: 1, duration: 0.45, ease: 'power2.in',
+                onComplete: () => {
+                    buildGenshinScene();
+                    genshinActive = true;
+                    gHideRunnerEnvironment();
+                    // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板并叠加场景 HUD
+                    document.getElementById('algorithm-data').classList.remove('visible');
+                    document.getElementById('genshin-hud').style.display = 'block';
+                    gsap.to(flash, { opacity: 0, duration: 1.6, delay: 0.3, ease: 'power2.out', onComplete: () => { flash.remove(); } });
+                }
+            });
+        }
+
+        function endGame() {
+            if (gameEnded) return;
+            gameEnded = true;
+            console.log('[游戏结束] 专注力积分达到100%');
+
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('final-coins').textContent = coinCount;
+            document.getElementById('genshin-hud').style.display = 'none';
+
+            // 生成本次注意力检测报告（标题按检测时段自动标注：中午/上午/下午…）
+            try { generateAttentionReport(); } catch (e) { console.warn('[报告] 生成失败', e); }
+
+            const showEnding = () => {
+                const ending = document.getElementById('ending');
+                ending.classList.add('active');
+                requestAnimationFrame(() => { ending.classList.add('visible'); });
+            };
+
+            if (genshinActive && gReady && gDoor) {
+                // 冲过大门（对应 openDoor 镜头），白屏后进入结算
+                gCamState = 'through';
+                gDoorOpening = true;                       // 门动画1.6倍速继续播放（开门）
+                if (gDoorBg) gDoorBg.visible = true;
+                gsap.killTweensOf(gCenter);
+                gsap.to(gCenter, { z: G_DOOR_Z - 320, duration: 0.9, ease: 'power2.in' });
+                const flash = document.createElement('div');
+                flash.style.cssText = 'position:fixed;inset:0;z-index:1150;pointer-events:none;background:#fff;opacity:0;';
+                document.body.appendChild(flash);
+                gsap.to(flash, {
+                    opacity: 1, duration: 0.45, delay: 0.55, ease: 'power2.in',
+                    onComplete: () => {
+                        showEnding();
+                        gsap.to(flash, { opacity: 0, duration: 1.2, delay: 0.4, onComplete: () => { flash.remove(); } });
+                    }
+                });
+            } else {
+                showEnding();
+            }
+        }
+
+        // ==================== 注意力检测报告 ====================
+        function gPeriodLabel(hour) {
+            if (hour < 6) return '凌晨';
+            if (hour < 9) return '早晨';
+            if (hour < 11) return '上午';
+            if (hour < 14) return '中午';
+            if (hour < 18) return '下午';
+            return '晚上';
+        }
+
+        function generateAttentionReport() {
+            const samples = attnHistory.slice();
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const period = gPeriodLabel(now.getHours());
+            const durMs = sessionStartTime ? (Date.now() - sessionStartTime) : 0;
+            const durStr = Math.floor(durMs / 60000) + '分' + Math.floor((durMs % 60000) / 1000) + '秒';
+            const dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
+                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+
+            // 统计指标
+            let avg = 0, max = 0, min = 0, std = 0, highT = 0, midT = 0, lowT = 0, distract = 0;
+            if (samples.length) {
+                avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+                max = Math.max.apply(null, samples);
+                min = Math.min.apply(null, samples);
+                std = Math.sqrt(samples.reduce((a, b) => a + (b - avg) * (b - avg), 0) / samples.length);
+                samples.forEach(v => { if (v > 70) highT++; else if (v >= 30) midT++; else lowT++; });
+                for (let i = 1; i < samples.length; i++) {
+                    if (samples[i] < 30 && samples[i - 1] >= 30) distract++; // 从专注跌入低注意力 = 一次走神
+                }
+            }
+            const pct = n => samples.length ? Math.round(n / samples.length * 100) : 0;
+            const stability = Math.max(0, Math.round(100 - std * 2.5)); // 波动越小稳定度越高
+
+            document.getElementById('report-title').textContent = period + '注意力检测报告';
+            document.getElementById('report-meta').textContent =
+                dateStr + ' · 检测时长 ' + durStr + ' · 采样 ' + samples.length + ' 次';
+
+            const items = [
+                [Math.round(avg) + '%', '平均注意力'],
+                [Math.round(max) + '%', '最高注意力'],
+                [Math.round(min) + '%', '最低注意力'],
+                [stability, '稳定度'],
+                [pct(highT) + '%', '高专注占比 >70'],
+                [pct(midT) + '%', '中等占比 30~70'],
+                [distract + ' 次', '走神次数'],
+                [hitCount + ' 次', '障碍碰撞']
+            ];
+            document.getElementById('report-grid').innerHTML = items.map(i =>
+                '<div class="report-item"><div class="ri-val">' + i[0] + '</div><div class="ri-label">' + i[1] + '</div></div>'
+            ).join('');
+
+            drawAttnChart(samples);
+
+            // 综合评级与建议
+            const compo = avg * 0.5 + pct(highT) * 0.3 + stability * 0.2;
+            let grade, advice;
+            if (compo >= 75) { grade = 'S'; advice = '专注状态极佳！注意力水平与稳定性都非常出色，请保持当前的作息与训练节奏。'; }
+            else if (compo >= 60) { grade = 'A'; advice = '专注表现良好，多数时间保持了较高的注意力。可尝试在有干扰的环境中训练，进一步提升抗干扰能力。'; }
+            else if (compo >= 45) { grade = 'B'; advice = '注意力中等，存在一定波动。建议训练前适当休息、减少环境干扰，并尝试逐步延长单次专注时间。'; }
+            else { grade = 'C'; advice = '本次检测注意力偏低、波动较大。建议保证充足睡眠，分段训练并循序渐进地延长专注时长。'; }
+            if (distract >= 5) advice += ' 本次走神 ' + distract + ' 次，可配合深呼吸训练改善注意力的持续性。';
+            document.getElementById('rating-badge').textContent = grade;
+            document.getElementById('rating-text').textContent = advice;
+
+            // 文本版报告（供保存）
+            reportText = [
+                '================================',
+                '      ' + period + '注意力检测报告',
+                '================================',
+                '检测时间: ' + dateStr,
+                '检测时长: ' + durStr + '（采样 ' + samples.length + ' 次）',
+                '',
+                '平均注意力: ' + avg.toFixed(1) + '%',
+                '最高注意力: ' + Math.round(max) + '%',
+                '最低注意力: ' + Math.round(min) + '%',
+                '稳定度: ' + stability + '（标准差 ' + std.toFixed(1) + '）',
+                '高专注占比(>70): ' + pct(highT) + '%',
+                '中等占比(30~70): ' + pct(midT) + '%',
+                '低注意力占比(<30): ' + pct(lowT) + '%',
+                '走神次数: ' + distract,
+                '障碍碰撞: ' + hitCount + ' 次',
+                '最终得分: ' + score + '（金币 ' + coinCount + '）',
+                '',
+                '综合评级: ' + grade,
+                '建议: ' + advice,
+                '',
+                '注意力曲线(每秒采样): ' + samples.map(v => Math.round(v)).join(',')
+            ].join('\r\n');
+        }
+
+        // 注意力曲线图：红/黄/绿三个区间底色 + 金色折线
+        function drawAttnChart(samples) {
+            const cv = document.getElementById('report-chart');
+            const ctx = cv.getContext('2d');
+            const W = cv.width, H = cv.height;
+            const padL = 34, padR = 12, padT = 14, padB = 24;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const yOf = v => padT + plotH * (1 - v / 100);
+
+            ctx.clearRect(0, 0, W, H);
+            // 区间底色
+            ctx.fillStyle = 'rgba(110,220,140,0.10)'; ctx.fillRect(padL, yOf(100), plotW, yOf(70) - yOf(100));
+            ctx.fillStyle = 'rgba(255,217,80,0.08)'; ctx.fillRect(padL, yOf(70), plotW, yOf(30) - yOf(70));
+            ctx.fillStyle = 'rgba(255,100,100,0.10)'; ctx.fillRect(padL, yOf(30), plotW, yOf(0) - yOf(30));
+            // 网格与刻度
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+            [0, 30, 70, 100].forEach(v => {
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                ctx.beginPath(); ctx.moveTo(padL, yOf(v)); ctx.lineTo(W - padR, yOf(v)); ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.45)';
+                ctx.fillText(v, padL - 5, yOf(v));
+            });
+            ctx.textAlign = 'center';
+            ctx.fillText('时间 →', W / 2, H - 8);
+
+            if (samples.length < 2) {
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.font = '13px sans-serif';
+                ctx.fillText('采样数据不足', W / 2, H / 2);
+                return;
+            }
+            // 折线 + 渐变填充
+            const xOf = i => padL + plotW * (i / (samples.length - 1));
+            const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+            grad.addColorStop(0, 'rgba(255,215,0,0.30)');
+            grad.addColorStop(1, 'rgba(255,215,0,0.02)');
+            ctx.beginPath();
+            ctx.moveTo(xOf(0), yOf(samples[0]));
+            for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
+            ctx.lineTo(xOf(samples.length - 1), yOf(0)); ctx.lineTo(xOf(0), yOf(0)); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(xOf(0), yOf(samples[0]));
+            for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
+            ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.6; ctx.stroke();
+        }
+
+        function saveAttentionReport() {
+            if (!reportText) return;
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const fname = '注意力检测报告_' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
+                '_' + pad(now.getHours()) + pad(now.getMinutes()) + '.txt';
+            const blob = new Blob(['﻿' + reportText], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        }
+
+        document.getElementById('restart-btn').addEventListener('click', () => { location.reload(); });
+        document.getElementById('save-report-btn').addEventListener('click', saveAttentionReport);
 
         // ==================== 觉醒系统 ====================
         function checkAwakening() {
@@ -979,6 +2101,7 @@
 
         // ==================== 装饰物 ====================
         function spawnDecoration() {
+            if (genshinActive) return; // 原神场景模式下不再生成梦核装饰物
             const side = Math.random() > 0.5 ? 1 : -1;
             const offsetX = (8 + Math.random() * 12) * side;
             const type = Math.floor(Math.random() * 5);
@@ -1055,6 +2178,7 @@
             iMesh.count = idx; iMesh.instanceMatrix.needsUpdate = true;
             if (iMesh.instanceColor) iMesh.instanceColor.needsUpdate = true;
             group.add(iMesh); scene.add(group); group._iMesh = iMesh;
+            group.visible = !genshinActive; // 原神场景模式下地面隐藏
 
             if (animateIn && bd.length > 0) {
                 group._animateIn = function () {
@@ -1092,7 +2216,7 @@
             const pts = [new THREE.Vector3(0, 0.08, -segmentLength / 2), new THREE.Vector3(0, 0.08, segmentLength / 2)];
             const g = new THREE.BufferGeometry().setFromPoints(pts);
             const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.12 }));
-            line.position.set(laneX, 0, centerZ); scene.add(line); return line;
+            line.position.set(laneX, 0, centerZ); line.visible = !genshinActive; scene.add(line); return line;
         }
 
         function disposeMesh(mesh) {
@@ -1163,7 +2287,17 @@
             lastFrameTime = now;
 
             if (hitCooldown > 0) hitCooldown--;
-            if (isPaused || !gameStarted) { composer.render(); return; }
+
+            if (isPaused || !gameStarted || gameEnded) {
+                if (genshinActive && gReady) {
+                    // 游戏结束后仍需播放冲门镜头；暂停时只显示冻结的合成画面
+                    if (gameEnded && !isPaused) updateGenshinScene(dt, now);
+                    renderGenshinComposite(!gameEnded);
+                } else {
+                    composer.render();
+                }
+                return;
+            }
 
             const att = Math.min(100, Math.max(0, focusValue));
             
@@ -1300,6 +2434,9 @@
 
             if (now - lastAttnTick >= attnTickInterval) { lastAttnTick = now; applyAttnEffects(); }
 
+            // 专注力积分进度：90%切入原神场景，100%游戏结束
+            checkFocusProgress();
+
             // UI
             document.getElementById('score-val').innerText = score;
             document.getElementById('coin-val').innerText = coinCount;
@@ -1322,7 +2459,13 @@
 
             if (simMode !== 'off') updateSimAttn(now);
 
-            composer.render();
+            if (genshinActive && gReady) {
+                // 原神场景作背景，跑酷玩法层（角色/障碍/金币）叠加其上
+                updateGenshinScene(dt, now);
+                renderGenshinComposite(true);
+            } else {
+                composer.render();
+            }
         }
 
         // ==================== 模拟注意力 ====================
@@ -1385,7 +2528,7 @@
         // ==================== 键盘 ====================
         document.addEventListener('keydown', (e) => {
             if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
-            if (!gameStarted) return;
+            if (!gameStarted || gameEnded) return;
             if (isPaused && e.key !== 'p' && e.key !== 'P') return;
             switch (e.key) {
                 case 'ArrowLeft': case 'a': case 'A': if (currentLane > -1) currentLane--; break;
@@ -1398,6 +2541,7 @@
         // ==================== 碰撞 ====================
         function onPlayerHit() {
             hitCooldown = 60;
+            hitCount++;
             score = Math.max(0, score - 5);
             showScoreChange(-5);
             flashPlayer();
@@ -1614,13 +2758,14 @@
 
         function applyAttnEffects() {
             const att = Math.min(100, Math.max(0, attention_value));
+            attnHistory.push(att); // 每秒采样，用于结束后的注意力检测报告
             if (att < 10) { if (score > 0) { score = Math.max(0, score - 1); showScoreChange(-1); } }
             else if (att <= 30) { score = Math.max(0, score + 1); showScoreChange(1); }
             else { score = Math.max(0, score + 5); showScoreChange(5); }
-            updateSceneVisuals(att);
+            if (!genshinActive) updateSceneVisuals(att);
 
-            // 注意力>30时也检查觉醒
-            if (att > 30 && !isAwakened) {
+            // 注意力>30时也检查觉醒（原神场景中不再触发觉醒）
+            if (att > 30 && !isAwakened && !genshinActive) {
                 checkAwakening();
             }
         }
@@ -1631,6 +2776,11 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
+            if (gReady) {
+                gCamera.aspect = window.innerWidth / window.innerHeight;
+                gCamera.updateProjectionMatrix();
+                gComposer.setSize(window.innerWidth, window.innerHeight);
+            }
         });
 
         init();
