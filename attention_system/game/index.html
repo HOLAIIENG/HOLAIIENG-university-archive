@@ -151,7 +151,18 @@
         .sim-btn.active { background: rgba(200,160,255,0.25); border-color: rgba(200,160,255,0.5); color: #fff; }
         #sim-val-display { font-family: monospace; font-size: 11px; color: rgba(200,180,255,0.6); min-width: 28px; text-align: center; }
 
-        /* 原神场景 HUD（专注力积分>=90%时显示） */
+        /* 调试：直接切换原神场景 */
+        #debug-genshin {
+            position: fixed; bottom: 64px; left: 20px; z-index: 400;
+            padding: 6px 14px; border: 1px solid rgba(255,215,0,0.3);
+            background: rgba(255,215,0,0.08); color: rgba(255,225,150,0.75);
+            border-radius: 16px; cursor: pointer; font-size: 11px;
+            font-family: monospace; backdrop-filter: blur(8px); transition: all 0.2s;
+        }
+        #debug-genshin:hover { background: rgba(255,215,0,0.22); color: #fff; border-color: rgba(255,215,0,0.6); }
+        #debug-genshin:disabled { opacity: 0.3; cursor: default; }
+
+        /* 原神场景 HUD（专注力积分>=75%时显示） */
         #genshin-hud {
             position: fixed; top: 158px; left: 50%; transform: translateX(-50%);
             z-index: 650; display: none; pointer-events: none;
@@ -278,7 +289,7 @@
     <div id="coin-bar-wrap">
         <div id="coin-bar-fill"></div>
         <div id="coin-bar-pct">0%</div>
-        <div id="coin-bar-label">Score: 0/800</div>
+        <div id="coin-bar-label">Score: 0/800<br>100% = 800分</div>
     </div>
 
     <div id="algorithm-data">
@@ -300,10 +311,11 @@
             <button class="sim-btn" data-mode="auto">AUTO</button>
         </div>
     </div>
+    <button id="debug-genshin" title="调试用：积分直接拉到75%并切入原神场景">⛩ 切换原神场景</button>
     <div class="controls" id="controls-hint">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停</div>
 
-    <!-- 原神场景 HUD（专注力积分90%~100%期间显示，场景由 three.js 直接渲染） -->
-    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">90</span>% / 100% · 保持专注，冲向终点之门</div>
+    <!-- 原神场景 HUD（专注力积分75%~100%期间显示，场景由 three.js 直接渲染） -->
+    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">75</span>% / 100%（100% = 800分）· 保持专注，冲向终点之门</div>
 
     <!-- 游戏结束画面 + 注意力检测报告 -->
     <div id="ending">
@@ -341,6 +353,7 @@
     <script>
         // ==================== 核心变量 ====================
         let scene, camera, renderer, composer, player, playerGroup;
+        let runnerAmbient, runnerDirLight; // 跑酷层灯光（进入原神场景后切换为场景同款打光）
         let score = 0, coinCount = 0, focusValue = 30;
         let currentLane = 0;
         let obstacles = [], decorations = [], coins = [];
@@ -355,8 +368,9 @@
         let gameStarted = false;
         let isAwakened = false; // 场景觉醒状态
 
-        // 原神场景接入：专注力积分（score/FOCUS_TARGET_SCORE 百分比）>=90% 进入场景，100% 游戏结束
+        // 原神场景接入：专注力积分（score/FOCUS_TARGET_SCORE 百分比）>=GENSHIN_ENTER_PCT 进入场景，100% 游戏结束
         const FOCUS_TARGET_SCORE = 800;
+        const GENSHIN_ENTER_PCT = 75;
         let genshinActive = false, genshinEntering = false, gameEnded = false;
 
         // 注意力检测报告数据（每秒采样一次，游戏结束时生成报告）
@@ -451,6 +465,16 @@
             if (d) d.textContent = mode === 'off' ? '--' : mode.toUpperCase();
         }
 
+        // ==================== 调试：直接切换原神场景 ====================
+        document.getElementById('debug-genshin').addEventListener('click', function () {
+            if (!gameStarted || genshinActive || genshinEntering || gameEnded) return;
+            // 积分直接拉到切换阈值，保证 HUD 百分比与后续 75%→100% 流程一致
+            score = Math.max(score, Math.ceil(FOCUS_TARGET_SCORE * GENSHIN_ENTER_PCT / 100));
+            updateCoinBar();
+            enterGenshinScene();
+            this.disabled = true;
+        });
+
         // ==================== 开始游戏 ====================
         document.getElementById('start-btn').addEventListener('click', startGame);
 
@@ -522,10 +546,11 @@
             createAfterimages();
             initInfiniteGroundAndLanes();
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const dirLight = new THREE.DirectionalLight(0xffeedd, 0.5);
-            dirLight.position.set(5, 15, 10);
-            scene.add(dirLight);
+            runnerAmbient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(runnerAmbient);
+            runnerDirLight = new THREE.DirectionalLight(0xffeedd, 0.5);
+            runnerDirLight.position.set(5, 15, 10);
+            scene.add(runnerDirLight);
 
             const pLight = new THREE.PointLight(0xaaccff, 0.6, 12);
             pLight.position.set(0, 2, 0);
@@ -1006,7 +1031,7 @@
             const pct = Math.min(100, Math.round((score / FOCUS_TARGET_SCORE) * 100));
             document.getElementById('coin-bar-fill').style.height = pct + '%';
             document.getElementById('coin-bar-pct').textContent = pct + '%';
-            document.getElementById('coin-bar-label').textContent = 'Score: ' + score + '/' + FOCUS_TARGET_SCORE;
+            document.getElementById('coin-bar-label').innerHTML = 'Score: ' + score + '/' + FOCUS_TARGET_SCORE + '<br>100% = ' + FOCUS_TARGET_SCORE + '分';
         }
 
         // ==================== 原神场景接入 ====================
@@ -1025,7 +1050,7 @@
                 const hudPct = document.getElementById('genshin-pct');
                 if (hudPct) hudPct.textContent = pctInt;
             }
-            if (!genshinActive && pct >= 90) enterGenshinScene();
+            if (!genshinActive && pct >= GENSHIN_ENTER_PCT) enterGenshinScene();
             if (pct >= 100) endGame();
         }
 
@@ -1042,6 +1067,9 @@
         const G_PILLAR_SPAN = 9000;                   // 程序化兜底石柱的循环长度
         const G_DOOR_Z = -3200;
         const G_ROAD_STEP = 30, G_ROAD_COUNT = 46, G_ROAD_Y = -38;
+        // 跑酷世界→原神世界的尺度比：跑酷赛道半宽6（车道±4+边缘） ↔ 石板路半宽23，
+        // 配合每帧把 gCamera 与跑酷相机同FOV同朝向对齐，使跑酷地面(y=0)精确落在石板路面上
+        const G_RUNNER_SCALE = 23 / 6;
         let gCamState = 'fly';                        // fly | stop | through
         // 素材目录（相对 index.html）
         const G_ASSET_DIR = 'assets/www-genshin-main/public/Genshin/Login/';
@@ -1326,6 +1354,18 @@
             gComposer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.4, 0.9));
             gComposer.setSize(window.innerWidth, window.innerHeight);
             gReady = true;
+        }
+
+        // 预构建+预热：场景构建、着色器编译、bloom 渲染目标分配都提前到开屏阶段完成，
+        // 否则这些开销集中在切换瞬间的同一帧里，会造成可感知的卡顿。
+        // 此时 intro 不透明遮罩盖住画布，预热帧用户不可见；场景本身在激活前不会推进动画。
+        function gPrewarmGenshinScene() {
+            if (gReady) return;
+            buildGenshinScene();
+            try {
+                renderer.compile(gScene, gCamera);   // 预编译场景内全部着色器（云海/极光/雾/星屑等）
+                gComposer.render();                  // 跑一帧合成，预热 bloom 的渲染目标与后期着色器
+            } catch (e) { console.warn('[原神场景] 预热失败（不影响游戏，切换时再构建）', e); }
         }
 
         function gBuildClouds() {
@@ -1706,7 +1746,16 @@
                     gsap.to(gCenter, { z: G_DOOR_Z + 235, duration: 4.5, ease: 'power2.out' });
                 }
             }
-            gCamera.position.set(gCenter.x, gCenter.y + Math.sin(now * 0.0008) * 3, gCenter.z);
+            // 与跑酷相机对齐：同FOV、同朝向，位置按 G_RUNNER_SCALE 相似变换，
+            // 跑酷地面平面(y=0)即精确投影到石板路顶面(y=G_ROAD_Y+4)，角色/障碍/金币贴路面且宽度匹配
+            gCamera.fov = camera.fov;
+            gCamera.quaternion.copy(camera.quaternion);
+            gCamera.position.set(
+                gCenter.x + camera.position.x * G_RUNNER_SCALE,
+                (G_ROAD_Y + 4) + camera.position.y * G_RUNNER_SCALE,
+                gCenter.z
+            );
+            gCamera.updateProjectionMatrix();
 
             // 云海循环（Cloud.update）
             let cloudDirty = false;
@@ -1797,6 +1846,19 @@
             }
         }
 
+        // 跑酷玩法层引用原神场景的打光（Game.ts：环境光0x0f6eff×2.5 + 平行光0xff6222×2.5），
+        // 使角色/障碍/金币与场景色调一致，不再像贴上去的另一层
+        function gApplyGenshinLighting() {
+            gsap.to(runnerAmbient.color, { r: 0x0f / 255, g: 0x6e / 255, b: 0xff / 255, duration: 1.2 });
+            gsap.to(runnerAmbient, { intensity: 2.5, duration: 1.2 });
+            gsap.to(runnerDirLight.color, { r: 0xff / 255, g: 0x62 / 255, b: 0x22 / 255, duration: 1.2 });
+            gsap.to(runnerDirLight, { intensity: 2.5, duration: 1.2 });
+            // 与 gDirLight 同方向（gCenter + (10000, 8657, 6000)，等比缩小）
+            runnerDirLight.position.set(10, 8.657, 6);
+            // 关闭角色自带冷色点光，避免污染场景色调
+            if (playerGroup && playerGroup._pointLight) gsap.to(playerGroup._pointLight, { intensity: 0, duration: 1.2 });
+        }
+
         // 隐藏跑酷自身环境（天空球/地面/车道线/装饰物），避免遮挡原神场景；
         // 角色、障碍物、金币、粒子保留，继续正常玩法
         function gHideRunnerEnvironment() {
@@ -1810,7 +1872,7 @@
         function enterGenshinScene() {
             if (genshinActive || genshinEntering) return;
             genshinEntering = true;
-            console.log('[原神场景] 专注力积分达到90%，切入场景（跑酷玩法继续）');
+            console.log('[原神场景] 专注力积分达到' + GENSHIN_ENTER_PCT + '%，切入场景（跑酷玩法继续）');
 
             const flash = document.createElement('div');
             flash.style.cssText = 'position:fixed;inset:0;z-index:900;pointer-events:none;background:#fff;opacity:0;';
@@ -1821,6 +1883,7 @@
                     buildGenshinScene();
                     genshinActive = true;
                     gHideRunnerEnvironment();
+                    gApplyGenshinLighting();
                     // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板并叠加场景 HUD
                     document.getElementById('algorithm-data').classList.remove('visible');
                     document.getElementById('genshin-hud').style.display = 'block';
@@ -2434,7 +2497,7 @@
 
             if (now - lastAttnTick >= attnTickInterval) { lastAttnTick = now; applyAttnEffects(); }
 
-            // 专注力积分进度：90%切入原神场景，100%游戏结束
+            // 专注力积分进度：75%切入原神场景，100%游戏结束
             checkFocusProgress();
 
             // UI
@@ -2784,6 +2847,8 @@
         });
 
         init();
+        // 开屏 intro 显示期间预构建并预热原神场景（GLB 异步加载也提前开始），切换时即为零等待
+        setTimeout(gPrewarmGenshinScene, 600);
     </script>
 </body>
 </html>
