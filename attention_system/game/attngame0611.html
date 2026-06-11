@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梦核穿行 · Dreamcore Runner</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+        canvas { display: block; }
+
+        /* ==================== HUD ==================== */
+        #hud {
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            color: #fff; pointer-events: none;
+            opacity: 0; transition: opacity 1s ease 0.5s;
+        }
+        #hud.visible { opacity: 1; }
+        #hud .score-line { font-size: 26px; font-weight: bold; text-shadow: 0 0 14px rgba(255,255,255,0.35); }
+        #hud .dist-line { font-size: 14px; opacity: 0.85; margin-top: 4px; letter-spacing: 1px; }
+        .energy-bar-container {
+            margin-top: 10px; width: 220px; height: 12px; border-radius: 8px;
+            background: rgba(255,255,255,0.12); overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.25);
+            transition: box-shadow 0.5s ease;
+        }
+        #attn-bar {
+            height: 100%; width: 0%; border-radius: 8px;
+            background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bff95);
+            transition: width 0.3s ease;
+        }
+        #hud .attn-line { margin-top: 6px; font-size: 13px; opacity: 0.9; }
+
+        /* ==================== 终端头环数据输出（保留自 index.html）==================== */
+        #algorithm-data {
+            position: absolute; top: 20px; right: 20px;
+            color: rgba(255,255,255,0.3); font-size: 10px;
+            text-align: right; z-index: 100; pointer-events: none;
+            font-family: monospace; opacity: 0; transition: opacity 1s ease 1s;
+        }
+        #algorithm-data.visible { opacity: 1; }
+        #algorithm-data div { margin-bottom: 2px; }
+
+        /* ==================== 场景名提示 ==================== */
+        #scene-title {
+            position: absolute; top: 18%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 200; pointer-events: none; text-align: center;
+            color: rgba(255,255,255,0.95); opacity: 0;
+            text-shadow: 0 0 18px rgba(255,255,255,0.45);
+        }
+        #scene-title .cn { font-size: 34px; letter-spacing: 10px; font-weight: 300; }
+        #scene-title .en { font-size: 13px; letter-spacing: 5px; opacity: 0.7; margin-top: 8px; font-family: monospace; text-transform: uppercase; }
+
+        /* ==================== 切换闪白 ==================== */
+        #dream-flash {
+            position: absolute; inset: 0; background: #fff; opacity: 0;
+            z-index: 500; pointer-events: none;
+        }
+
+        /* ==================== 梦核 VHS 噪点滤镜 ==================== */
+        #grain {
+            position: absolute; inset: -50%; width: 200%; height: 200%;
+            z-index: 400; pointer-events: none; opacity: 0.07;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+            animation: grain-shift 0.6s steps(4) infinite;
+        }
+        @keyframes grain-shift {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(-2%, 1.5%); }
+            50% { transform: translate(1.5%, -2%); }
+            75% { transform: translate(-1%, -1%); }
+            100% { transform: translate(2%, 2%); }
+        }
+        #scanlines {
+            position: absolute; inset: 0; z-index: 401; pointer-events: none; opacity: 0.10;
+            background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0,0,0,0.55) 3px, transparent 4px);
+        }
+
+        /* ==================== 开始 / 暂停 ==================== */
+        #start-overlay {
+            position: absolute; inset: 0; z-index: 600;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at center, rgba(20,10,40,0.85) 0%, rgba(0,0,5,0.96) 100%);
+            color: #fff; cursor: pointer; transition: opacity 1.2s ease;
+        }
+        #start-overlay.hidden { opacity: 0; pointer-events: none; }
+        #start-overlay h1 { font-size: 44px; font-weight: 200; letter-spacing: 16px; text-shadow: 0 0 30px rgba(180,150,255,0.6); }
+        #start-overlay .sub { margin-top: 14px; font-size: 13px; letter-spacing: 4px; opacity: 0.6; font-family: monospace; }
+        #start-overlay .tip { margin-top: 50px; font-size: 15px; opacity: 0.8; animation: breathe 2.4s ease-in-out infinite; }
+        @keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+
+        #pause-overlay {
+            position: absolute; inset: 0; z-index: 550; display: none;
+            align-items: center; justify-content: center;
+            background: rgba(5,0,15,0.55); backdrop-filter: blur(6px);
+            color: #fff; font-size: 30px; letter-spacing: 12px; font-weight: 200;
+        }
+        #pause-overlay.active { display: flex; }
+
+        /* ==================== 提示语 ==================== */
+        #reminder {
+            position: absolute; top: 32%; left: 50%;
+            color: rgba(245,225,255,0.95); font-size: 24px; font-weight: 500;
+            text-shadow: 0 0 12px rgba(200,160,220,0.4), 0 0 30px rgba(180,140,210,0.25);
+            z-index: 200; pointer-events: none;
+            opacity: 0; letter-spacing: 3px; white-space: nowrap;
+            padding: 6px 20px; border-radius: 24px;
+            background: radial-gradient(ellipse at center, rgba(180,140,210,0.12) 0%, transparent 70%);
+        }
+
+        /* ==================== 积分蒙太奇 ==================== */
+        .score-montage {
+            position: absolute; z-index: 300; pointer-events: none;
+            font-size: 26px; font-weight: bold; opacity: 0;
+            text-shadow: 0 0 14px currentColor;
+        }
+        .score-montage.pos { color: #8effb1; }
+        .score-montage.neg { color: #ff8e8e; }
+
+        .controls {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            color: rgba(255,255,255,0.5); font-size: 12px; z-index: 100;
+            opacity: 0; transition: opacity 1s ease 2.5s;
+        }
+        .controls.visible { opacity: 1; }
+
+        #ws-status {
+            position: absolute; bottom: 20px; right: 20px; z-index: 100;
+            font-family: monospace; font-size: 10px; pointer-events: none;
+            color: rgba(255,120,120,0.55);
+        }
+        #ws-status.connected { color: rgba(120,255,170,0.7); }
+    </style>
+</head>
+<body>
+    <!-- HUD -->
+    <div id="hud">
+        <div class="score-line">Score: <span id="score-val">0</span></div>
+        <div class="dist-line">🌙 梦境深度 <span id="dist-val">0</span> m</div>
+        <div class="energy-bar-container"><div id="attn-bar"></div></div>
+        <div class="attn-line">⚡ Attn: <span id="attn-top">0</span>%</div>
+    </div>
+
+    <!-- 终端头环数据输出（保留自 index.html） -->
+    <div id="algorithm-data">
+        <div>GyroX: <span id="gyro-x">0.00</span></div>
+        <div>GyroY: <span id="gyro-y">0.00</span></div>
+        <div>GyroZ: <span id="gyro-z">0.00</span></div>
+        <div>Attn: <span id="attn-val">0.00</span></div>
+        <div>CursorX: <span id="cursor-x">0</span></div>
+        <div>CursorY: <span id="cursor-y">0</span></div>
+    </div>
+
+    <div id="scene-title"><div class="cn"></div><div class="en"></div></div>
+    <div id="dream-flash"></div>
+    <div id="grain"></div>
+    <div id="scanlines"></div>
+    <div id="reminder"></div>
+    <div id="ws-status">HEADBAND: OFFLINE</div>
+
+    <div id="start-overlay">
+        <h1>梦核穿行</h1>
+        <div class="sub">DREAMCORE RUNNER · MULTI-SCENE</div>
+        <div class="tip">点击任意位置，坠入梦境</div>
+    </div>
+    <div id="pause-overlay">已 暂 停</div>
+
+    <div class="controls" id="controls-hint">头环陀螺仪：抬头跳跃 / 左右转头变道 | 键盘：← → / A D 变道 · Space 跳跃 · P 暂停</div>
+
+    <script src="./libs/three.min.js"></script>
+    <script src="./libs/EffectComposer.js"></script>
+    <script src="./libs/RenderPass.js"></script>
+    <script src="./libs/ShaderPass.js"></script>
+    <script src="./libs/UnrealBloomPass.js"></script>
+    <script src="./libs/CopyShader.js"></script>
+    <script src="./libs/LuminosityHighPassShader.js"></script>
+    <script src="./libs/VignetteShader.js"></script>
+    <script src="./libs/gsap.min.js"></script>
+
+    <script>
+        // ==================== 全局状态 ====================
+        let scene, camera, renderer, composer;
+        let player, playerGroup, skyMesh;
+        let gameStarted = false, isPaused = false;
+        let currentLane = 0, isJumping = false;
+        let score = 0, distance = 0, hitCooldown = 0;
+        let focusValue = 0;
+
+        const LANE_WIDTH = 4;
+        const obstacles = [], shards = [], decorations = [];
+        const groundSegments = [];
+        const GROUND_SEG_LEN = 60, GROUND_SEG_COUNT = 4;
+
+        let spawnCursorZ = -40;          // 下一批障碍/碎片生成位置
+        let lastAttnTick = 0;
+        const attnTickInterval = 1000;
+        let attnHistory = [];
+
+        // 算法数据（来自头环）
+        let gyroscope_x = 0, gyroscope_y = 0, gyroscope_z = 0, attention_value = 0;
+        let focus_area_width = 0, focus_area_height = 0, focus_area_x = 0, focus_area_y = 0;
+        let focus_x = 0, focus_y = 0;
+        let filtered_focus_x = 0, filtered_focus_y = 0;
+        const FOCUS_EMA_ALPHA_X = 0.3, FOCUS_EMA_ALPHA_Y = 0.6;
+
+        // WebSocket
+        let ws = null;
+        const WS_URL = 'ws://localhost:8765';
+        let wsConnected = false;
+
+        // ==================== 梦核场景预设 ====================
+        const DREAM_SCENES = [
+            {
+                cn: '泳 池 边 缘', en: 'The Poolrooms',
+                topColor: 0x9be8e8, midColor: 0x4fc3cf, bottomColor: 0xe0fbff,
+                sunColor: 0xffffff, sunY: 0.3, exponent: 0.6,
+                fogColor: 0x7fd8de, fogNear: 14, fogFar: 70,
+                bloom: 0.35, vignette: { darkness: 0.9, offset: 1.05 },
+                floorCol: 0xbfeef2, laneCol: 0x4fc3cf,
+                playerCol: 0xffffff, obstacleCol: 0x1b7f8c,
+                deco: 'pool'
+            },
+            {
+                cn: '黄 昏 旷 野', en: 'Golden Hour Field',
+                topColor: 0x3b2a5a, midColor: 0xd4724f, bottomColor: 0xffd9a0,
+                sunColor: 0xffe9c4, sunY: 0.14, exponent: 0.7,
+                fogColor: 0xd4845f, fogNear: 16, fogFar: 75,
+                bloom: 0.5, vignette: { darkness: 1.1, offset: 1.0 },
+                floorCol: 0x8a6a4f, laneCol: 0xffc88a,
+                playerCol: 0xfff0d0, obstacleCol: 0x4a2f6e,
+                deco: 'field'
+            },
+            {
+                cn: '午 夜 长 廊', en: 'Midnight Hallway',
+                topColor: 0x02000f, midColor: 0x191040, bottomColor: 0x6457c9,
+                sunColor: 0xcfd0ff, sunY: 0.22, exponent: 0.65,
+                fogColor: 0x16103a, fogNear: 10, fogFar: 55,
+                bloom: 0.65, vignette: { darkness: 1.6, offset: 0.95 },
+                floorCol: 0x241b52, laneCol: 0x8d7dff,
+                playerCol: 0xd9d4ff, obstacleCol: 0xff5ea0,
+                deco: 'hallway'
+            },
+            {
+                cn: '白 噪 空 间', en: 'Static Void',
+                topColor: 0xf2f0ee, midColor: 0xe3d8e8, bottomColor: 0xfff7ef,
+                sunColor: 0xffffff, sunY: 0.4, exponent: 0.45,
+                fogColor: 0xefe8ec, fogNear: 12, fogFar: 60,
+                bloom: 0.25, vignette: { darkness: 0.6, offset: 1.15 },
+                floorCol: 0xe8dfe6, laneCol: 0xc9a8d8,
+                playerCol: 0xb89ae0, obstacleCol: 0x7a6a8a,
+                deco: 'void'
+            }
+        ];
+        const SCENE_SWITCH_DISTANCE = 350;   // 每前进350m切换一个梦境
+        let sceneIndex = 0, nextSwitchAt = SCENE_SWITCH_DISTANCE;
+
+        // 当前渲染用的插值视觉参数
+        const vis = {
+            topColor: new THREE.Color(), midColor: new THREE.Color(), bottomColor: new THREE.Color(),
+            sunColor: new THREE.Color(), sunY: 0.3, exponent: 0.6,
+            fogColor: new THREE.Color(), fogNear: 14, fogFar: 70,
+            bloom: 0.35, vigDark: 0.9, vigOff: 1.05,
+            floorCol: new THREE.Color(), laneCol: new THREE.Color(),
+            playerCol: new THREE.Color(), obstacleCol: new THREE.Color()
+        };
+
+        function applyPresetInstant(p) {
+            vis.topColor.setHex(p.topColor); vis.midColor.setHex(p.midColor); vis.bottomColor.setHex(p.bottomColor);
+            vis.sunColor.setHex(p.sunColor); vis.sunY = p.sunY; vis.exponent = p.exponent;
+            vis.fogColor.setHex(p.fogColor); vis.fogNear = p.fogNear; vis.fogFar = p.fogFar;
+            vis.bloom = p.bloom; vis.vigDark = p.vignette.darkness; vis.vigOff = p.vignette.offset;
+            vis.floorCol.setHex(p.floorCol); vis.laneCol.setHex(p.laneCol);
+            vis.playerCol.setHex(p.playerCol); vis.obstacleCol.setHex(p.obstacleCol);
+        }
+
+        function lerpVisualsToward(p, t) {
+            vis.topColor.lerp(new THREE.Color(p.topColor), t);
+            vis.midColor.lerp(new THREE.Color(p.midColor), t);
+            vis.bottomColor.lerp(new THREE.Color(p.bottomColor), t);
+            vis.sunColor.lerp(new THREE.Color(p.sunColor), t);
+            vis.sunY += (p.sunY - vis.sunY) * t;
+            vis.exponent += (p.exponent - vis.exponent) * t;
+            vis.fogColor.lerp(new THREE.Color(p.fogColor), t);
+            vis.fogNear += (p.fogNear - vis.fogNear) * t;
+            vis.fogFar += (p.fogFar - vis.fogFar) * t;
+            vis.bloom += (p.bloom - vis.bloom) * t;
+            vis.vigDark += (p.vignette.darkness - vis.vigDark) * t;
+            vis.vigOff += (p.vignette.offset - vis.vigOff) * t;
+            vis.floorCol.lerp(new THREE.Color(p.floorCol), t);
+            vis.laneCol.lerp(new THREE.Color(p.laneCol), t);
+            vis.playerCol.lerp(new THREE.Color(p.playerCol), t);
+            vis.obstacleCol.lerp(new THREE.Color(p.obstacleCol), t);
+        }
+
+        // ==================== 初始化 ====================
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x7fd8de, 14, 70);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 300);
+            camera.position.set(0, 5, 10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            document.body.appendChild(renderer.domElement);
+
+            composer = new THREE.EffectComposer(renderer);
+            composer.addPass(new THREE.RenderPass(scene, camera));
+            const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.6, 0.82);
+            composer.addPass(bloomPass);
+            const vigPass = new THREE.ShaderPass(THREE.VignetteShader);
+            vigPass.uniforms["darkness"].value = 0.9;
+            vigPass.uniforms["offset"].value = 1.05;
+            composer.addPass(vigPass);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambient);
+            const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+            dir.position.set(5, 12, 6);
+            scene.add(dir);
+
+            createSky();
+            createPlayer();
+            for (let i = 0; i < GROUND_SEG_COUNT; i++) createGroundSegment(-i * GROUND_SEG_LEN);
+            applyPresetInstant(DREAM_SCENES[0]);
+            syncVisuals();
+
+            initWebSocket();
+            animate();
+        }
+
+        // ==================== 天空 ====================
+        function createSky() {
+            const geo = new THREE.SphereGeometry(180, 32, 24);
+            const mat = new THREE.ShaderMaterial({
+                side: THREE.BackSide, fog: false,
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x9be8e8) },
+                    midColor: { value: new THREE.Color(0x4fc3cf) },
+                    bottomColor: { value: new THREE.Color(0xe0fbff) },
+                    sunColor: { value: new THREE.Color(0xffffff) },
+                    sunY: { value: 0.3 },
+                    exponent: { value: 0.6 },
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    varying vec3 vDir;
+                    void main() {
+                        vDir = normalize(position);
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }`,
+                fragmentShader: `
+                    uniform vec3 topColor, midColor, bottomColor, sunColor;
+                    uniform float sunY, exponent, time;
+                    varying vec3 vDir;
+                    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                    void main() {
+                        float h = vDir.y;
+                        vec3 col = h > 0.0
+                            ? mix(midColor, topColor, pow(min(h * 1.6, 1.0), exponent))
+                            : mix(midColor, bottomColor, pow(min(-h * 2.2, 1.0), exponent));
+                        // 太阳/月亮光晕
+                        vec3 sunDir = normalize(vec3(0.0, sunY, -1.0));
+                        float d = max(dot(vDir, sunDir), 0.0);
+                        col += sunColor * (pow(d, 220.0) * 0.9 + pow(d, 18.0) * 0.25);
+                        // 梦核噪点（缓慢漂移的颗粒感）
+                        float n = hash(vDir.xy * 240.0 + time * 0.4) * 0.035;
+                        col += vec3(n);
+                        gl_FragColor = vec4(col, 1.0);
+                    }`
+            });
+            skyMesh = new THREE.Mesh(geo, mat);
+            scene.add(skyMesh);
+        }
+
+        // ==================== 玩家 ====================
+        function createPlayer() {
+            playerGroup = new THREE.Group();
+            const geo = new THREE.SphereGeometry(0.7, 32, 24);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5,
+                roughness: 0.3, metalness: 0.1
+            });
+            player = new THREE.Mesh(geo, mat);
+            player.position.y = 1;
+            playerGroup.add(player);
+
+            const glowGeo = new THREE.SphereGeometry(1.0, 24, 16);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, fog: false });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.y = 1;
+            playerGroup.add(glow);
+            playerGroup._glow = glow;
+
+            const pl = new THREE.PointLight(0xffffff, 1.0, 14);
+            pl.position.y = 2;
+            playerGroup.add(pl);
+            playerGroup._pointLight = pl;
+
+            scene.add(playerGroup);
+        }
+
+        // ==================== 地面（梦核棋盘格）====================
+        let checkerTex = null;
+        function makeCheckerTexture() {
+            const c = document.createElement('canvas');
+            c.width = c.height = 256;
+            const ctx = c.getContext('2d');
+            for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+                ctx.fillStyle = (x + y) % 2 ? '#ffffff' : '#b4b4b4';
+                ctx.fillRect(x * 32, y * 32, 32, 32);
+            }
+            const t = new THREE.CanvasTexture(c);
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.repeat.set(10, 12);
+            return t;
+        }
+
+        function createGroundSegment(z) {
+            if (!checkerTex) checkerTex = makeCheckerTexture();
+            const group = new THREE.Group();
+            const floorGeo = new THREE.PlaneGeometry(50, GROUND_SEG_LEN, 1, 1);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0xbfeef2, roughness: 0.85, map: checkerTex });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            group.add(floor);
+            group._floorMat = floorMat;
+
+            // 三条跑道发光线
+            group._laneMats = [];
+            [-LANE_WIDTH * 1.5, -LANE_WIDTH * 0.5, LANE_WIDTH * 0.5, LANE_WIDTH * 1.5].forEach(x => {
+                const lineGeo = new THREE.PlaneGeometry(0.12, GROUND_SEG_LEN);
+                const lineMat = new THREE.MeshBasicMaterial({ color: 0x4fc3cf, transparent: true, opacity: 0.55 });
+                const line = new THREE.Mesh(lineGeo, lineMat);
+                line.rotation.x = -Math.PI / 2;
+                line.position.set(x, 0.02, 0);
+                group.add(line);
+                group._laneMats.push(lineMat);
+            });
+
+            group.position.z = z;
+            scene.add(group);
+            groundSegments.push(group);
+            return group;
+        }
+
+        function recycleGround() {
+            groundSegments.forEach(g => {
+                if (g.position.z > playerGroup.position.z + GROUND_SEG_LEN) {
+                    g.position.z -= GROUND_SEG_LEN * GROUND_SEG_COUNT;
+                }
+            });
+        }
+
+        // ==================== 障碍 / 梦境碎片 / 装饰 ====================
+        function disposeMesh(obj) {
+            obj.traverse(o => {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) { Array.isArray(o.material) ? o.material.forEach(m => m.dispose()) : o.material.dispose(); }
+            });
+        }
+
+        function spawnObstacle(z) {
+            const lane = Math.floor(Math.random() * 3) - 1;
+            const h = 1.4 + Math.random() * 0.8;
+            const geo = new THREE.BoxGeometry(1.6, h, 1.0);
+            const mat = new THREE.MeshStandardMaterial({
+                color: vis.obstacleCol.getHex(), emissive: vis.obstacleCol.getHex(),
+                emissiveIntensity: 0.35, roughness: 0.5
+            });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.set(lane * LANE_WIDTH, h / 2, z);
+            m._lane = lane; m._height = h;
+            scene.add(m);
+            obstacles.push(m);
+        }
+
+        function spawnShard(z) {
+            const lane = Math.floor(Math.random() * 3) - 1;
+            const geo = new THREE.OctahedronGeometry(0.4);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xffe9a0, emissive: 0xffd45e, emissiveIntensity: 0.9,
+                roughness: 0.2, metalness: 0.4
+            });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.set(lane * LANE_WIDTH, 1.2, z);
+            m._lane = lane; m._collected = false;
+            scene.add(m);
+            shards.push(m);
+        }
+
+        // 每种梦境有独特的路旁装饰
+        function spawnDecoration(z) {
+            const side = Math.random() < 0.5 ? -1 : 1;
+            const x = side * (10 + Math.random() * 14);
+            const type = DREAM_SCENES[sceneIndex].deco;
+            let m = null;
+
+            if (type === 'pool') {
+                // 白色瓷砖立柱
+                const h = 4 + Math.random() * 6;
+                m = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.6, h, 1.6),
+                    new THREE.MeshStandardMaterial({ color: 0xf4ffff, roughness: 0.25 })
+                );
+                m.position.set(x, h / 2, z);
+            } else if (type === 'field') {
+                // 旷野中孤立的门
+                m = new THREE.Group();
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 0.3 });
+                const l = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.4, 0.25), frameMat);
+                const r = l.clone(); const t = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.25, 0.25), frameMat);
+                l.position.set(-0.85, 1.7, 0); r.position.set(0.85, 1.7, 0); t.position.set(0, 3.4, 0);
+                const doorMat = new THREE.MeshBasicMaterial({ color: 0xffe9c4, transparent: true, opacity: 0.35, fog: false });
+                const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.2), doorMat);
+                panel.position.set(0, 1.6, 0);
+                m.add(l, r, t, panel);
+                m.position.set(x, 0, z);
+                m.rotation.y = (Math.random() - 0.5) * 0.8;
+            } else if (type === 'hallway') {
+                // 发光门框灯柱
+                m = new THREE.Group();
+                const c = new THREE.Color(Math.random() < 0.5 ? 0xff5ea0 : 0x8d7dff);
+                const lampMat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.4 });
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 8), lampMat);
+                pole.position.y = 2.5;
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.07, 8, 24), lampMat);
+                ring.position.y = 5;
+                m.add(pole, ring);
+                m.position.set(x, 0, z);
+                m._spin = true;
+            } else {
+                // 白噪空间：漂浮的柔色几何体
+                const geos = [new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.SphereGeometry(0.8, 16, 12), new THREE.ConeGeometry(0.8, 1.6, 16)];
+                const cols = [0xc9a8d8, 0xa8c8d8, 0xd8c9a8, 0xb8d8b0];
+                m = new THREE.Mesh(
+                    geos[Math.floor(Math.random() * geos.length)],
+                    new THREE.MeshStandardMaterial({ color: cols[Math.floor(Math.random() * cols.length)], roughness: 0.6 })
+                );
+                m.position.set(x, 2 + Math.random() * 5, z);
+                m._spin = true; m._float = true;
+            }
+
+            scene.add(m);
+            decorations.push(m);
+        }
+
+        function spawnAhead() {
+            const targetZ = playerGroup.position.z - 120;
+            while (spawnCursorZ > targetZ) {
+                if (Math.random() < 0.65) spawnObstacle(spawnCursorZ);
+                if (Math.random() < 0.55) spawnShard(spawnCursorZ - 4);
+                if (Math.random() < 0.8) spawnDecoration(spawnCursorZ - 2);
+                spawnCursorZ -= 9 + Math.random() * 6;
+            }
+        }
+
+        function cleanupBehind() {
+            const limit = playerGroup.position.z + 20;
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                if (obstacles[i].position.z > limit) { scene.remove(obstacles[i]); disposeMesh(obstacles[i]); obstacles.splice(i, 1); }
+            }
+            for (let i = shards.length - 1; i >= 0; i--) {
+                if (shards[i].position.z > limit && !shards[i]._collected) { scene.remove(shards[i]); disposeMesh(shards[i]); shards.splice(i, 1); }
+            }
+            for (let i = decorations.length - 1; i >= 0; i--) {
+                if (decorations[i].position.z > limit) { scene.remove(decorations[i]); disposeMesh(decorations[i]); decorations.splice(i, 1); }
+            }
+        }
+
+        // ==================== 粒子（跳跃 / 落地 / 收集）====================
+        const bursts = [];
+        function spawnBurst(pos, colorHex, count, speedScale, upward) {
+            const positions = new Float32Array(count * 3);
+            const vels = [];
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = pos.x + (Math.random() - 0.5) * 0.6;
+                positions[i * 3 + 1] = pos.y + (Math.random() - 0.5) * 0.2;
+                positions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * 0.6;
+                vels.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 3 * speedScale,
+                    (upward ? 1.5 + Math.random() * 2.5 : Math.random() * 1.2) * speedScale,
+                    (Math.random() - 0.5) * 3 * speedScale
+                ));
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: colorHex, size: 0.14, transparent: true, opacity: 0.9, depthWrite: false });
+            const pts = new THREE.Points(geo, mat);
+            pts._vels = vels; pts._life = 0; pts._maxLife = 0.7;
+            scene.add(pts);
+            bursts.push(pts);
+        }
+
+        function updateBursts(dt) {
+            for (let i = bursts.length - 1; i >= 0; i--) {
+                const b = bursts[i];
+                b._life += dt;
+                const pos = b.geometry.attributes.position;
+                for (let j = 0; j < b._vels.length; j++) {
+                    const v = b._vels[j];
+                    v.y -= 6 * dt;
+                    pos.array[j * 3] += v.x * dt;
+                    pos.array[j * 3 + 1] += v.y * dt;
+                    pos.array[j * 3 + 2] += v.z * dt;
+                }
+                pos.needsUpdate = true;
+                b.material.opacity = 0.9 * Math.max(0, 1 - b._life / b._maxLife);
+                if (b._life >= b._maxLife) {
+                    scene.remove(b); b.geometry.dispose(); b.material.dispose();
+                    bursts.splice(i, 1);
+                }
+            }
+        }
+
+        // ==================== 残影（高注意力疾速感）====================
+        let afterimageTimer = 0;
+        const _ghostPos = new THREE.Vector3();
+        function updateAfterimages(dt, att) {
+            afterimageTimer -= dt;
+            if (att > 60 && afterimageTimer <= 0) {
+                afterimageTimer = 0.07;
+                player.getWorldPosition(_ghostPos);
+                const ghost = new THREE.Mesh(
+                    player.geometry,
+                    new THREE.MeshBasicMaterial({ color: vis.playerCol.getHex(), transparent: true, opacity: 0.22, depthWrite: false, fog: false })
+                );
+                ghost.position.copy(_ghostPos);
+                ghost.scale.copy(player.scale);
+                scene.add(ghost);
+                gsap.to(ghost.material, { opacity: 0, duration: 0.45, ease: 'power1.out', onComplete: () => { scene.remove(ghost); ghost.material.dispose(); } });
+                gsap.to(ghost.scale, { x: 0.5, y: 0.5, z: 0.5, duration: 0.45 });
+            }
+        }
+
+        // ==================== 梦境切换 ====================
+        function switchDreamScene() {
+            sceneIndex = (sceneIndex + 1) % DREAM_SCENES.length;
+            const p = DREAM_SCENES[sceneIndex];
+
+            // 闪白过场
+            const flash = document.getElementById('dream-flash');
+            gsap.killTweensOf(flash);
+            gsap.fromTo(flash, { opacity: 0 }, { opacity: 0.95, duration: 0.35, ease: 'power2.in', onComplete: () => {
+                gsap.to(flash, { opacity: 0, duration: 1.4, ease: 'power2.out' });
+            }});
+
+            announceScene(p);
+        }
+
+        function announceScene(p) {
+            const el = document.getElementById('scene-title');
+            el.querySelector('.cn').textContent = p.cn;
+            el.querySelector('.en').textContent = p.en;
+            gsap.killTweensOf(el);
+            gsap.fromTo(el, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 1.0, ease: 'power2.out', delay: 0.4 });
+            gsap.to(el, { opacity: 0, y: -10, duration: 1.2, delay: 3.2, ease: 'power2.in' });
+        }
+
+        // 把插值后的视觉参数同步到渲染对象
+        function syncVisuals() {
+            if (skyMesh) {
+                const u = skyMesh.material.uniforms;
+                u.topColor.value.copy(vis.topColor);
+                u.midColor.value.copy(vis.midColor);
+                u.bottomColor.value.copy(vis.bottomColor);
+                u.sunColor.value.copy(vis.sunColor);
+                u.sunY.value = vis.sunY;
+                u.exponent.value = vis.exponent;
+            }
+            scene.fog.color.copy(vis.fogColor);
+            scene.fog.near = vis.fogNear;
+            scene.fog.far = vis.fogFar;
+            if (composer.passes[1]) composer.passes[1].strength = vis.bloom;
+            if (composer.passes[2]) {
+                composer.passes[2].uniforms["darkness"].value = vis.vigDark;
+                composer.passes[2].uniforms["offset"].value = vis.vigOff;
+            }
+            groundSegments.forEach(g => {
+                g._floorMat.color.copy(vis.floorCol);
+                g._laneMats.forEach(lm => lm.color.copy(vis.laneCol));
+            });
+            if (player) {
+                player.material.color.lerp(vis.playerCol, 0.1);
+                player.material.emissive.lerp(vis.playerCol, 0.08);
+            }
+            if (playerGroup._glow) playerGroup._glow.material.color.lerp(vis.playerCol, 0.08);
+            if (playerGroup._pointLight) playerGroup._pointLight.color.lerp(vis.playerCol, 0.08);
+            obstacles.forEach(o => {
+                if (o.material && o.material.color) {
+                    o.material.color.lerp(vis.obstacleCol, 0.06);
+                    if (o.material.emissive) o.material.emissive.lerp(vis.obstacleCol, 0.05);
+                }
+            });
+        }
+
+        // ==================== WebSocket（保留自 index.html）====================
+        function initWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+                ws.onopen = () => { wsConnected = true; updateWsStatus(); };
+                ws.onmessage = function (e) {
+                    try {
+                        const d = JSON.parse(e.data);
+                        updateAlgorithmData(d.gyroscope_x, d.gyroscope_y, d.gyroscope_z, d.attention, d.focus_area_width, d.focus_area_height, d.focus_area_x, d.focus_area_y, d.focus_x, d.focus_y);
+                    } catch (err) { }
+                };
+                ws.onerror = () => { };
+                ws.onclose = () => { wsConnected = false; updateWsStatus(); setTimeout(initWebSocket, 5000); };
+            } catch (e) { }
+        }
+
+        function updateWsStatus() {
+            const el = document.getElementById('ws-status');
+            if (!el) return;
+            el.textContent = wsConnected ? 'HEADBAND: ONLINE' : 'HEADBAND: OFFLINE';
+            el.classList.toggle('connected', wsConnected);
+        }
+
+        // ==================== 算法数据（保留自 index.html）====================
+        function updateAlgorithmData(gyroX, gyroY, gyroZ, attention, fw, fh, fax, fay, fx, fy) {
+            gyroscope_x = gyroX || 0; gyroscope_y = gyroY || 0; gyroscope_z = gyroZ || 0;
+            let ar = (attention !== undefined && attention !== null) ? attention : 0;
+            attention_value = ar > 1 ? ar : ar * 100;
+            focus_area_width = fw || 0; focus_area_height = fh || 0;
+            focus_area_x = fax || 0; focus_area_y = fay || 0;
+            focus_x = fx || 0; focus_y = fy || 0;
+            filtered_focus_x = FOCUS_EMA_ALPHA_X * focus_x + (1 - FOCUS_EMA_ALPHA_X) * filtered_focus_x;
+            filtered_focus_y = FOCUS_EMA_ALPHA_Y * focus_y + (1 - FOCUS_EMA_ALPHA_Y) * filtered_focus_y;
+            focusValue = Math.min(100, Math.max(0, attention_value));
+        }
+
+        // ==================== 陀螺仪（保留自 index.html）====================
+        let laneChangeCooldown = 0;
+        const LANE_CHANGE_COOLDOWN_FRAMES = 45;
+        const GYRO_Y_JUMP_THRESHOLD = 260;
+        const GYRO_Z_LEFT_THRESHOLD = 180;
+        const GYRO_Z_RIGHT_THRESHOLD = 160;
+        let last_gyro_y_for_jump = 270, last_gyro_z_for_lane = 170;
+
+        function updatePlayerPositionFromGyro() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (laneChangeCooldown > 0) laneChangeCooldown--;
+            if (gyroscope_y < GYRO_Y_JUMP_THRESHOLD && last_gyro_y_for_jump >= GYRO_Y_JUMP_THRESHOLD) {
+                if (player.position.y <= 1.3 && !isJumping) triggerJump();
+            }
+            if (laneChangeCooldown === 0) {
+                if (gyroscope_z > GYRO_Z_LEFT_THRESHOLD && last_gyro_z_for_lane <= GYRO_Z_LEFT_THRESHOLD) {
+                    if (currentLane > -1) { currentLane--; laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES; }
+                } else if (gyroscope_z < GYRO_Z_RIGHT_THRESHOLD && last_gyro_z_for_lane >= GYRO_Z_RIGHT_THRESHOLD) {
+                    if (currentLane < 1) { currentLane++; laneChangeCooldown = LANE_CHANGE_COOLDOWN_FRAMES; }
+                }
+            }
+            last_gyro_y_for_jump = gyroscope_y; last_gyro_z_for_lane = gyroscope_z;
+        }
+
+        // ==================== 跳跃 ====================
+        function triggerJump() {
+            if (isJumping) return;
+            isJumping = true;
+            spawnBurst(new THREE.Vector3(playerGroup.position.x, 0.2, playerGroup.position.z), vis.playerCol.getHex(), 14, 1.0, true);
+            const tl = gsap.timeline({ onComplete: () => { isJumping = false; } });
+            tl.to(player.position, { y: 3.5, duration: 0.3, ease: "power2.out" }, 0);
+            tl.to(player.position, { y: 3.5, duration: 0.1 }, 0.3);
+            tl.to(player.position, { y: 1, duration: 0.25, ease: "power2.in" }, 0.4);
+            tl.to(player.scale, { x: 1.25, y: 0.75, z: 1.25, duration: 0.08, ease: "power2.out" }, 0.65);
+            tl.to(player.scale, { x: 1, y: 1, z: 1, duration: 0.25, ease: "elastic.out(1, 0.4)" }, 0.73);
+            tl.call(() => { spawnBurst(new THREE.Vector3(playerGroup.position.x, 0.2, playerGroup.position.z), 0xffffff, 10, 0.8, false); }, null, 0.65);
+        }
+
+        // ==================== 键盘 ====================
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+            if (!gameStarted) return;
+            if (isPaused && e.key !== 'p' && e.key !== 'P') return;
+            switch (e.key) {
+                case 'ArrowLeft': case 'a': case 'A': if (currentLane > -1) currentLane--; break;
+                case 'ArrowRight': case 'd': case 'D': if (currentLane < 1) currentLane++; break;
+                case ' ': if (player.position.y <= 1.3 && !isJumping) triggerJump(); break;
+                case 'p': case 'P': togglePause(); break;
+            }
+        });
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pause-overlay').classList.toggle('active', isPaused);
+        }
+
+        // ==================== 碰撞 ====================
+        function onPlayerHit() {
+            hitCooldown = 60;
+            score = Math.max(0, score - 5);
+            showScoreChange(-5);
+            flashPlayer();
+            showReminder();
+        }
+
+        function flashPlayer() {
+            const oei = player.material.emissiveIntensity;
+            const tl = gsap.timeline();
+            tl.to(player.material, { emissiveIntensity: 2.2, duration: 0.08, onStart: () => { player.material.emissive.set(0xff3333); } })
+                .to(player.material, { emissiveIntensity: oei, duration: 0.1 })
+                .to(player.material, { emissiveIntensity: 2.2, duration: 0.08 })
+                .to(player.material, { emissiveIntensity: oei, duration: 0.1, onComplete: () => { player.material.emissive.copy(vis.playerCol); } });
+            gsap.to(playerGroup.position, { x: playerGroup.position.x + 0.3, duration: 0.05, yoyo: true, repeat: 3, ease: "power2.inOut" });
+        }
+
+        function showReminder() {
+            const msgs = ['集中注意力哦～', '别走神，继续跑～', '专注，你可以的～', '保持专注，冲呀～', '注意力集中起来～', '加油，别被干扰～', '盯紧前方哦～', '稳住，集中精神～'];
+            const el = document.getElementById('reminder');
+            gsap.killTweensOf(el);
+            el.textContent = msgs[Math.floor(Math.random() * msgs.length)];
+            gsap.fromTo(el, { opacity: 0, scale: 0.85, xPercent: -50, yPercent: -50, filter: 'blur(4px)' }, { opacity: 1, scale: 1.05, xPercent: -50, yPercent: -50, filter: 'blur(0px)', duration: 0.3, ease: 'power2.out' });
+            gsap.to(el, { opacity: 0, scale: 1.02, xPercent: -50, yPercent: -72, filter: 'blur(3px)', duration: 1.8, delay: 0.9, ease: 'power2.out' });
+        }
+
+        // ==================== 积分蒙太奇 ====================
+        let _montageEl = null;
+        function showScoreChange(amount) {
+            if (!amount) return;
+            if (!_montageEl || !document.body.contains(_montageEl)) {
+                _montageEl = document.createElement('div');
+                _montageEl.className = 'score-montage';
+                document.body.appendChild(_montageEl);
+            }
+            const el = _montageEl;
+            el.classList.remove('pos', 'neg');
+            el.classList.add(amount > 0 ? 'pos' : 'neg');
+            el.textContent = (amount > 0 ? '+' : '') + amount;
+            el.style.left = '50%'; el.style.top = '32%';
+            gsap.killTweensOf(el);
+            gsap.fromTo(el, { opacity: 0, y: 6, xPercent: -50, yPercent: -50 }, { opacity: 1, y: 0, xPercent: -50, yPercent: -50, duration: 0.25, ease: 'power2.out' });
+            gsap.to(el, { opacity: 0, y: -34, xPercent: -50, yPercent: -50, duration: 1.1, delay: 0.2, ease: 'power2.out' });
+        }
+
+        // ==================== 注意力效果（每秒一次）====================
+        function applyAttnEffects() {
+            const att = Math.min(100, Math.max(0, attention_value));
+            attnHistory.push(att);
+            if (att < 10) { if (score > 0) { score = Math.max(0, score - 1); showScoreChange(-1); } }
+            else if (att <= 30) { score = Math.max(0, score + 1); showScoreChange(1); }
+            else { score = Math.max(0, score + 5); showScoreChange(5); }
+        }
+
+        // ==================== 主循环 ====================
+        let lastFrameTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+            lastFrameTime = now;
+
+            if (skyMesh) {
+                skyMesh.position.copy(camera.position);
+                skyMesh.material.uniforms.time.value = now * 0.001;
+            }
+
+            if (isPaused || !gameStarted) { composer.render(); return; }
+
+            if (hitCooldown > 0) hitCooldown--;
+
+            // 速度随注意力提升：低注意力慢速漂浮，高注意力疾速穿行
+            const att = Math.min(100, Math.max(0, focusValue));
+            const speed = 0.12 + 0.0024 * att;
+            playerGroup.position.z -= speed * dt * 60;
+            distance = Math.floor(-playerGroup.position.z);
+
+            // 陀螺仪控制
+            updatePlayerPositionFromGyro();
+
+            // 横向变道
+            const targetX = currentLane * LANE_WIDTH;
+            playerGroup.position.x += (targetX - playerGroup.position.x) * 0.14;
+            player.rotation.z = (playerGroup.position.x - targetX) * 0.15;
+            player.rotation.x -= speed * dt * 14;
+
+            // 梦境切换（按行进深度）
+            if (distance >= nextSwitchAt) {
+                nextSwitchAt += SCENE_SWITCH_DISTANCE;
+                switchDreamScene();
+            }
+            lerpVisualsToward(DREAM_SCENES[sceneIndex], 1 - Math.pow(0.04, dt));
+            syncVisuals();
+
+            // 生成 / 回收
+            spawnAhead();
+            cleanupBehind();
+            recycleGround();
+
+            // 碎片旋转浮动
+            shards.forEach(s => {
+                if (s._collected) return;
+                s.rotation.y += dt * 2.5;
+                s.position.y = 1.2 + Math.sin(now * 0.003 + s.position.z * 0.5) * 0.18;
+            });
+            decorations.forEach(d => {
+                if (d._spin) d.rotation.y += dt * 0.8;
+                if (d._float) d.position.y += Math.sin(now * 0.001 + d.position.z * 0.1) * 0.005;
+            });
+
+            updateBursts(dt);
+            updateAfterimages(dt, att);
+
+            // 碰撞检测
+            const pz = playerGroup.position.z, py = player.position.y;
+            if (hitCooldown === 0) {
+                for (const o of obstacles) {
+                    if (o._lane === currentLane && Math.abs(o.position.z - pz) < 1.1 && py < o._height + 0.3) {
+                        onPlayerHit();
+                        break;
+                    }
+                }
+            }
+            for (const s of shards) {
+                if (!s._collected && s._lane === currentLane && Math.abs(s.position.z - pz) < 1.2 && Math.abs(s.position.y - py) < 1.6) {
+                    s._collected = true;
+                    score += 10;
+                    showScoreChange(10);
+                    spawnBurst(s.position.clone(), 0xffd45e, 12, 1.2, true);
+                    gsap.to(s.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 0.3, ease: 'power2.in', onComplete: () => {
+                        scene.remove(s); disposeMesh(s);
+                        const i = shards.indexOf(s); if (i >= 0) shards.splice(i, 1);
+                    }});
+                    gsap.to(s.position, { y: s.position.y + 2, duration: 0.3, ease: 'power2.out' });
+                }
+            }
+
+            // 相机跟随
+            camera.position.lerp(new THREE.Vector3(playerGroup.position.x, 5, playerGroup.position.z + 10), 0.12);
+            camera.lookAt(playerGroup.position.x, 0, playerGroup.position.z - 5);
+
+            // 注意力效果（每秒）
+            if (now - lastAttnTick >= attnTickInterval) { lastAttnTick = now; applyAttnEffects(); }
+
+            // UI
+            document.getElementById('score-val').innerText = score;
+            document.getElementById('dist-val').innerText = distance;
+            document.getElementById('attn-top').innerText = Math.round(attention_value);
+            document.getElementById('attn-bar').style.width = Math.min(100, Math.max(0, attention_value)) + '%';
+
+            const bc = document.querySelector('.energy-bar-container');
+            if (bc) {
+                if (attention_value > 70) bc.style.boxShadow = '0 0 25px rgba(0,255,136,0.6)';
+                else if (attention_value > 30) bc.style.boxShadow = '0 0 15px rgba(255,217,61,0.4)';
+                else bc.style.boxShadow = '0 0 10px rgba(255,50,50,0.3)';
+            }
+
+            // 终端头环数据输出（保留自 index.html）
+            document.getElementById('gyro-x').innerText = gyroscope_x.toFixed(2);
+            document.getElementById('gyro-y').innerText = gyroscope_y.toFixed(2);
+            document.getElementById('gyro-z').innerText = gyroscope_z.toFixed(2);
+            document.getElementById('attn-val').innerText = attention_value.toFixed(2);
+            document.getElementById('cursor-x').innerText = filtered_focus_x.toFixed(0);
+            document.getElementById('cursor-y').innerText = filtered_focus_y.toFixed(0);
+
+            composer.render();
+        }
+
+        // ==================== 开始 ====================
+        document.getElementById('start-overlay').addEventListener('click', () => {
+            if (gameStarted) return;
+            gameStarted = true;
+            document.getElementById('start-overlay').classList.add('hidden');
+            document.getElementById('hud').classList.add('visible');
+            document.getElementById('algorithm-data').classList.add('visible');
+            document.getElementById('controls-hint').classList.add('visible');
+            announceScene(DREAM_SCENES[0]);
+        });
+
+        // ==================== 窗口适配 ====================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</body>
+</html>
