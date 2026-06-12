@@ -1,14 +1,14 @@
 import asyncio
 import websockets
 import json
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 
 class WebSocketBridge(QObject):
     """WebSocket桥接器：将TCP接收的算法数据转发给Web客户端"""
     
     # 信号：发送数据到WebSocket客户端
-    send_to_websocket = pyqtSignal(str)
+    send_to_websocket = Signal(str)
     
     def __init__(self, host='localhost', port=8765):
         super().__init__()
@@ -21,7 +21,7 @@ class WebSocketBridge(QObject):
     async def handler(self, websocket):
         """处理WebSocket连接（新版websockets API）"""
         self.clients.add(websocket)
-        print(f"[WebSocket] 客户端已连接，当前连接数: {len(self.clients)}")
+        print(f"[WebSocket] client connected, total: {len(self.clients)}")
         
         try:
             # 保持连接活跃
@@ -32,7 +32,7 @@ class WebSocketBridge(QObject):
             pass
         finally:
             self.clients.discard(websocket)
-            print(f"[WebSocket] 客户端已断开，当前连接数: {len(self.clients)}")
+            print(f"[WebSocket] client disconnected, total: {len(self.clients)}")
     
     async def broadcast(self, message):
         """向所有连接的客户端广播消息"""
@@ -56,7 +56,7 @@ class WebSocketBridge(QObject):
             async def start_and_run():
                 # 先创建服务器
                 self.server = await websockets.serve(self.handler, self.host, self.port)
-                print(f"[WebSocket] 服务器已启动在 ws://{self.host}:{self.port}")
+                print(f"[WebSocket] server started at ws://{self.host}:{self.port}")
                 
                 # 保持服务器运行
                 try:

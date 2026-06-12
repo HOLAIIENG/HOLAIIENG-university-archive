@@ -379,6 +379,7 @@
         // 注意力持续时间追踪（用于分阶段加速/视觉切换）
         // 改为：任意跨区间（上或下）都会触发视觉过渡；但加/减速在新阶段稳定后（延迟）才生效，且加速/减速为立即设置（不用平滑）
         let currentSpeedBoost = 0; // 当前速度加成（立即应用，无平滑）
+        let gSceneEntryZ = 0;     // 进入原神场景时 gCenter 的起始 Z
         // 可视化/配色管理：当前已应用的梦境阶段（1/2/3）
         let currentVisualStage = 1; // 已应用到场景的阶段（1/2/3）
         let stageAppliedTime = performance.now(); // 最近一次阶段应用时间（用于判断稳定时长）
@@ -386,10 +387,11 @@
         const SPEED_APPLY_DELAY = 800; // ms：跨区间后等待此延时再立即应用速度加减（用户要求800ms）
         let lastSpeedAppliedStage = currentVisualStage; // 记录当前已为其应用速度的阶段
 
+//注意力阶段加成速度
         function boostForStage(stage) {
             if (stage === 1) return 0.0;
-            if (stage === 2) return 0.3;
-            if (stage === 3) return 0.5;
+            if (stage === 2) return 0.03;
+            if (stage === 3) return 0.08;
             return 0.0;
         }
 
@@ -428,7 +430,7 @@
         const BLOCK_HEIGHT_MIN = 0.2, BLOCK_HEIGHT_MAX = 1.0, GROUND_WIDTH = 60;
         const LANE_X_POSITIONS = [-4, 0, 4];
         const BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc];
-        const segmentLength = 40, aheadRange = 60, behindRange = 40;
+        const segmentLength = 40, aheadRange = 100, behindRange = 40;
         const groundSegments = [];
         const laneSegments = { '-4': [], '0': [], '4': [] };
 
@@ -888,8 +890,9 @@
                 // 清理3D拖尾
                 trailClones.forEach(tc => { scene.remove(tc.mesh); tc.mesh.geometry = null; });
 
-                // 获取金币在屏幕上的3D位置，投射到2D
-                const screenPos = toScreenPosition(coin, camera);
+                // 用玩家当前屏幕坐标作为起点（金币已动画到玩家身边，
+                // 不用coin.position——它在摄像机后面会得到翻转坐标）
+                const screenPos = toScreenPosition(playerGroup, camera);
                 createFlyingCoinDot(screenPos.x, screenPos.y, coin._coinValue, coin._coinColor);
             });
 
@@ -1333,6 +1336,7 @@
             gCamera.rotation.x = 5.5 * Math.PI / 180;            // 原相机仰角
             gCenter.set(0, 0, 0);
             gCamState = 'fly';
+            gSceneEntryZ = gCenter.z;
 
             // 灯光（AmbientLightComponent 0x0f6eff / DirectionalLightComponent 0xff6222）
             gScene.add(new THREE.AmbientLight(0x0f6eff, 2.5));
@@ -1740,10 +1744,13 @@
         function updateGenshinScene(dt, now) {
             // 前进相机（ForwardCamera）：接近大门时减速停在门前，等待积分到100%
             if (gCamState === 'fly') {
-                gCenter.z -= G_SPEED * dt;
-                if (gCenter.z <= G_DOOR_Z + 950) {
+                const pct = getFocusPct();
+                const scenePct = Math.min(1, (pct - GENSHIN_ENTER_PCT) / (100 - GENSHIN_ENTER_PCT));
+                const gSceneEndZ = G_DOOR_Z + 235;
+                const targetZ = gSceneEntryZ + (gSceneEndZ - gSceneEntryZ) * scenePct;
+                gCenter.z += (targetZ - gCenter.z) * Math.min(1, dt * 3);
+                if (scenePct >= 0.98) {
                     gCamState = 'stop';
-                    gsap.to(gCenter, { z: G_DOOR_Z + 235, duration: 4.5, ease: 'power2.out' });
                 }
             }
             // 与跑酷相机对齐：同FOV、同朝向，位置按 G_RUNNER_SCALE 相似变换，
@@ -2656,7 +2663,7 @@
         let _montageEl = null, _montageHideTimer = null, _lastScoreKey = null, _lastScoreCount = 0;
 
         function ensureMontageEl() {
-            if (_montageEl && document.body.contains(_montageEl)) return _montageEl;
+        if (_montageEl && document.body.contains(_montageEl)) return _montageEl;
             _montageEl = document.createElement('div'); _montageEl.className = 'score-montage';
             document.body.appendChild(_montageEl); return _montageEl;
         }

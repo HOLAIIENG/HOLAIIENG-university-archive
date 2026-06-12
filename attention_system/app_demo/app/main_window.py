@@ -1,7 +1,7 @@
 import json
 import re
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QFrame, QLabel, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QSizePolicy
+from PySide6.QtCore import Qt
 
 from attention_system.app_demo.app.titile_bar import CustomTitleBar
 from attention_system.app_demo.ipc_socket.tcp_socket_client import HNNKTcpSocketClient
@@ -48,16 +48,16 @@ class MainWindow(QMainWindow):
     #在屏幕中央居中显示
     def show_window_center(self):
         self.resize(1220, 490)
-        screen = QDesktopWidget().screenGeometry()
-        x = (screen.size().width() - self.geometry().width()) // 2
-        y = (screen.size().height() - self.geometry().height()) // 2
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.geometry().width()) // 2
+        y = (screen.height() - self.geometry().height()) // 2
         self.setGeometry(x, y, self.geometry().width(), self.geometry().height())
         self.show()
 
     # ui初始化
     def init_ui(self):
         # 设置无边框窗体，并居中显示
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setStyleSheet("background-color: white;")
 
         # 主内容布局：包含标题栏 + 内容区
@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
         '''
         #连接区域
         connect_widget = QWidget()
-        connect_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        connect_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         connect_hbox = QHBoxLayout()
         connect_hbox.setContentsMargins(40, 0, 40, 0)
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
 
         server_ip_label = QLabel('服务器地址')
         server_ip_label.setFixedHeight(16)
-        server_ip_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        server_ip_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         server_ip_label.setStyleSheet("""
                QLabel {
                    font-family: "SourceHanSansCN";
@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
                 color: #3E3F42;
             }
         """)
-        self.server_ip_lineedit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.server_ip_lineedit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         server_ip_vbox.addWidget(server_ip_label)
         server_ip_vbox.addWidget(self.server_ip_lineedit)
@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
 
         server_port_label = QLabel('端口')
         server_port_label.setFixedHeight(16)
-        server_port_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        server_port_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         server_port_label.setStyleSheet("""
                              QLabel {
                                  font-family: "SourceHanSansCN";
@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
                    }
                """)
 
-        self.server_port_lineedit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.server_port_lineedit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         server_port_vbox.addWidget(server_port_label)
         server_port_vbox.addWidget(self.server_port_lineedit)
@@ -188,7 +188,7 @@ class MainWindow(QMainWindow):
             border: 2px solid rgba(192,200,211,0.2);
         }
         """)
-        self.connect_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.connect_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.connect_button.clicked.connect(self.connect_server)
 
         self.disconnect_button = QPushButton("断开")
@@ -212,12 +212,12 @@ class MainWindow(QMainWindow):
             border: 2px solid rgba(192,200,211,0.2);
         }
         """)
-        self.disconnect_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.disconnect_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.disconnect_button.clicked.connect(self.disconnect_server)
 
         self.connect_status_label = QLabel('状态: 未连接')
         self.connect_status_label.setFixedHeight(16)
-        self.connect_status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.connect_status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.connect_status_label.setStyleSheet("""
             QLabel {
                 font-family: "SourceHanSansCN";
@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
                 line-height: 24px;
             }
         """)
-        self.connect_status_label.setAlignment(Qt.AlignCenter)
+        self.connect_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         server_btn_hbox.addWidget(self.connect_button, 1)
         server_btn_hbox.addWidget(self.disconnect_button, 1)
@@ -243,7 +243,7 @@ class MainWindow(QMainWindow):
 
         #自定义内容区域
         content_widget = QFrame()
-        content_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        content_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         content_widget.setObjectName("contentFrame")
         content_widget.setStyleSheet("""
             #contentFrame {

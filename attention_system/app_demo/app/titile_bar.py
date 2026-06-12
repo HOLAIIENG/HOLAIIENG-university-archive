@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QMainWindow, QWidget,
     QHBoxLayout, QLabel, QPushButton, QSizePolicy
 )
-from PyQt5.QtGui import QIcon
-from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt, QPoint, QSize
+from PySide6.QtGui import QIcon
+from PySide6.QtSvgWidgets import QSvgWidget
+from PySide6.QtCore import Qt, QPoint, QSize
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent_window: QMainWindow = None):
@@ -45,7 +45,7 @@ class CustomTitleBar(QWidget):
         """)
         self.close_button.setIconSize(QSize(20, 20))
         self.close_button.setFixedSize(20, 20)
-        self.close_button.setCursor(Qt.PointingHandCursor)
+        self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_button.clicked.connect(self.on_close_btn_clicked)
 
         self.layout.addWidget(self.icon_label)
@@ -57,13 +57,13 @@ class CustomTitleBar(QWidget):
         self.parent_window.close()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.moving = True
-            self.offset = event.globalPos() - self.parent_window.frameGeometry().topLeft()
+            self.offset = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event):
-        if Qt.LeftButton and self.moving:
-            self.parent_window.move(event.globalPos() - self.offset)
+        if self.moving:
+            self.parent_window.move(event.globalPosition().toPoint() - self.offset)
 
     def mouseReleaseEvent(self, event):
         self.moving = False
