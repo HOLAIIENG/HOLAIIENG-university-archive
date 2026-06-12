@@ -162,7 +162,7 @@
         #debug-genshin:hover { background: rgba(255,215,0,0.22); color: #fff; border-color: rgba(255,215,0,0.6); }
         #debug-genshin:disabled { opacity: 0.3; cursor: default; }
 
-        /* 原神场景 HUD（专注力积分>=75%时显示） */
+        /* 原神场景 HUD（专注力积分>=50%时显示） */
         #genshin-hud {
             position: fixed; top: 158px; left: 50%; transform: translateX(-50%);
             z-index: 650; display: none; pointer-events: none;
@@ -311,11 +311,11 @@
             <button class="sim-btn" data-mode="auto">AUTO</button>
         </div>
     </div>
-    <button id="debug-genshin" title="调试用：积分直接拉到75%并切入原神场景">⛩ 切换原神场景</button>
+    <button id="debug-genshin" title="调试用：积分直接拉到50%并切入原神场景">⛩ 切换原神场景</button>
     <div class="controls" id="controls-hint">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停</div>
 
-    <!-- 原神场景 HUD（专注力积分75%~100%期间显示，场景由 three.js 直接渲染） -->
-    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">75</span>% / 100%（100% = 800分）· 保持专注，冲向终点之门</div>
+    <!-- 原神场景 HUD（专注力积分50%~100%期间显示，场景由 three.js 直接渲染） -->
+    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">50</span>% / 100%（100% = 800分）· 保持专注，冲向终点之门</div>
 
     <!-- 游戏结束画面 + 注意力检测报告 -->
     <div id="ending">
@@ -370,7 +370,7 @@
 
         // 原神场景接入：专注力积分（score/FOCUS_TARGET_SCORE 百分比）>=GENSHIN_ENTER_PCT 进入场景，100% 游戏结束
         const FOCUS_TARGET_SCORE = 800;
-        const GENSHIN_ENTER_PCT = 75;
+        const GENSHIN_ENTER_PCT = 50;
         let genshinActive = false, genshinEntering = false, gameEnded = false;
 
         // 注意力检测报告数据（每秒采样一次，游戏结束时生成报告）
@@ -1065,7 +1065,7 @@
         const G_SPAN = 20600;                         // 场景循环长度 zLength*0.1（Config.ts: 206000）
         const G_SPAN_RAW = 206000;
         const G_PILLAR_SPAN = 9000;                   // 程序化兜底石柱的循环长度
-        const G_DOOR_Z = -3200;
+        const G_DOOR_Z = -3200;                       // 大门相对相机的前方距离（积分满100%前始终保持，永不抵达）
         const G_ROAD_STEP = 30, G_ROAD_COUNT = 46, G_ROAD_Y = -38;
         // 跑酷世界→原神世界的尺度比：跑酷赛道半宽6（车道±4+边缘） ↔ 石板路半宽23，
         // 配合每帧把 gCamera 与跑酷相机同FOV同朝向对齐，使跑酷地面(y=0)精确落在石板路面上
@@ -1738,13 +1738,11 @@
 
         // ---------- 每帧更新（移植各组件的 update 逻辑） ----------
         function updateGenshinScene(dt, now) {
-            // 前进相机（ForwardCamera）：接近大门时减速停在门前，等待积分到100%
+            // 前进相机（ForwardCamera）：积分到100%前持续前进，道路无限循环生成；
+            // 大门始终保持在前方固定距离（永不抵达），endGame 时才定格冲刺穿门
             if (gCamState === 'fly') {
                 gCenter.z -= G_SPEED * dt;
-                if (gCenter.z <= G_DOOR_Z + 950) {
-                    gCamState = 'stop';
-                    gsap.to(gCenter, { z: G_DOOR_Z + 235, duration: 4.5, ease: 'power2.out' });
-                }
+                if (gDoor) gDoor.position.z = gCenter.z + G_DOOR_Z;
             }
             // 与跑酷相机对齐：同FOV、同朝向，位置按 G_RUNNER_SCALE 相似变换，
             // 跑酷地面平面(y=0)即精确投影到石板路顶面(y=G_ROAD_Y+4)，角色/障碍/金币贴路面且宽度匹配
@@ -1916,12 +1914,15 @@
                 gDoorOpening = true;                       // 门动画1.6倍速继续播放（开门）
                 if (gDoorBg) gDoorBg.visible = true;
                 gsap.killTweensOf(gCenter);
-                gsap.to(gCenter, { z: G_DOOR_Z - 320, duration: 0.9, ease: 'power2.in' });
+                // 把门定格在正前方，加速冲刺穿门
+                const doorZ = gCenter.z - 700;
+                gDoor.position.z = doorZ;
+                gsap.to(gCenter, { z: doorZ - 320, duration: 1.2, ease: 'power2.in' });
                 const flash = document.createElement('div');
                 flash.style.cssText = 'position:fixed;inset:0;z-index:1150;pointer-events:none;background:#fff;opacity:0;';
                 document.body.appendChild(flash);
                 gsap.to(flash, {
-                    opacity: 1, duration: 0.45, delay: 0.55, ease: 'power2.in',
+                    opacity: 1, duration: 0.45, delay: 0.6, ease: 'power2.in',
                     onComplete: () => {
                         showEnding();
                         gsap.to(flash, { opacity: 0, duration: 1.2, delay: 0.4, onComplete: () => { flash.remove(); } });
