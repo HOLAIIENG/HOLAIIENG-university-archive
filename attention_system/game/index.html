@@ -350,25 +350,58 @@
         #pause-overlay span { font-size: 48px; font-weight: 200; color: rgba(220,180,255,0.7); letter-spacing: 0.5em; }
 
         /* ===== 报告历史记录 ===== */
-        /* 开场被试录入栏 */
-        #subject-bar {
-            margin-top: 30px; display: flex; align-items: center; gap: 8px;
-            font-size: 12px; color: rgba(220,180,255,0.45); letter-spacing: 1px;
-            opacity: 0; animation: introBtnIn 0.8s ease-out 2.0s forwards;
+        /* 开场页历史按钮：右下角隐蔽浮动 */
+        .intro-history-btn {
+            position: absolute; bottom: 28px; right: 28px;
+            padding: 5px 14px; background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+            color: rgba(220,180,255,0.3); font-size: 10px; letter-spacing: 2px;
+            cursor: pointer; font-family: inherit; transition: all 0.3s;
+            opacity: 0; animation: introBtnIn 0.8s ease-out 2.2s forwards;
         }
-        .attn-select, .attn-input {
-            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
-            color: #e8e8f0; border-radius: 8px; padding: 5px 8px; font-size: 12px;
-            font-family: inherit; outline: none; max-width: 140px;
+        .intro-history-btn:hover {
+            background: rgba(200,140,255,0.08); border-color: rgba(200,140,255,0.25);
+            color: rgba(220,180,255,0.65);
         }
-        .attn-select option { background: #14181f; color: #e8e8f0; }
-        .attn-input::placeholder { color: rgba(255,255,255,0.3); }
-        .mini-btn {
-            padding: 5px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
-            color: rgba(235,238,235,0.6); border-radius: 8px; cursor: pointer; font-size: 12px;
-            font-family: inherit; transition: all 0.2s;
+
+        /* 玩家录入面板：结束界面右下角，隐蔽 */
+        #player-input-panel {
+            position: absolute; bottom: 20px; right: 24px;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+            z-index: 10; opacity: 0; animation: fadeInUp 0.6s ease 1.2s forwards;
         }
-        .mini-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        #player-saved-hint {
+            font-size: 10px; color: rgba(150,200,165,0.6); letter-spacing: 2px;
+            padding-right: 2px;
+        }
+        #player-input-row {
+            display: flex; align-items: center; gap: 5px;
+        }
+        .player-input {
+            width: 100px; padding: 4px 8px;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; color: rgba(255,255,255,0.6); font-size: 11px;
+            font-family: inherit; outline: none; transition: all 0.25s;
+        }
+        .player-input::placeholder { color: rgba(255,255,255,0.2); font-size: 10px; }
+        .player-input:focus {
+            border-color: rgba(150,200,165,0.3); background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.85);
+        }
+        .player-save-btn {
+            padding: 4px 10px; background: rgba(150,200,165,0.06);
+            border: 1px solid rgba(150,200,165,0.18); border-radius: 8px;
+            color: rgba(180,215,185,0.5); font-size: 10px; letter-spacing: 1px;
+            cursor: pointer; font-family: inherit; transition: all 0.2s;
+        }
+        .player-save-btn:hover {
+            background: rgba(150,200,165,0.14); border-color: rgba(150,200,165,0.40);
+            color: rgba(200,230,205,0.85);
+        }
 
         /* 历史对比报告浮层 — 非对称布局 */
         #history-overlay {
@@ -389,7 +422,7 @@
             content: ''; position: absolute; top: 0; left: 24px; right: 24px; height: 1px;
             background: linear-gradient(90deg, rgba(150,200,165,0.30) 0%, rgba(150,200,165,0.05) 50%, transparent 100%);
         }
-        /* 历史头部：标题左 + 被试选择右 */
+        /* 历史头部：标题左 + 玩家选择右 */
         #history-header {
             display: flex; align-items: flex-start; justify-content: space-between;
             margin-bottom: 10px; gap: 16px;
@@ -407,6 +440,12 @@
             display: flex; align-items: center; gap: 6px; flex-shrink: 0;
             font-size: 11px; color: rgba(255,255,255,0.45); padding-top: 2px;
         }
+        .attn-select {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10);
+            color: rgba(232,232,240,0.8); border-radius: 6px; padding: 3px 6px;
+            font-size: 11px; font-family: inherit; outline: none;
+        }
+        .attn-select option { background: #12161c; color: #e8e8f0; }
         #history-empty {
             display: none; text-align: center; color: rgba(255,255,255,0.35);
             font-size: 12px; padding: 36px 0; letter-spacing: 1.5px;
@@ -503,6 +542,81 @@
             box-shadow: 0 4px 24px rgba(0,0,0,0.5);
         }
         #pdf-loading-box::before { content: '⏳ '; }
+
+        /* ===== PDF 正式报告渲染区（隐藏，off-screen） ===== */
+        #pdf-render-area {
+            position: fixed; left: -9999px; top: 0; z-index: -1;
+            width: 794px; /* A4 @96dpi: 210mm */
+            pointer-events: none;
+            /* 不能用 opacity:0，否则 html2canvas 截取到透明画布 → 损坏 PNG */
+        }
+        #pdf-page {
+            width: 794px; min-height: 1123px; /* A4 @96dpi: 297mm */
+            background: #fff; color: #1a1a1a; padding: 48px 52px;
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 13px; line-height: 1.6;
+            box-sizing: border-box;
+        }
+        /* 正式报告排版 */
+        .rpt-header {
+            display: flex; align-items: flex-end; justify-content: space-between;
+            border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 20px;
+        }
+        .rpt-header-left {}
+        .rpt-title { font-size: 22px; font-weight: 700; color: #111; letter-spacing: 3px; margin-bottom: 4px; }
+        .rpt-subtitle { font-size: 11px; color: #666; letter-spacing: 1px; }
+        .rpt-grade {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: 56px; font-weight: 700; font-style: italic;
+            color: #333; line-height: 1; letter-spacing: -2px;
+        }
+        .rpt-meta-bar {
+            display: flex; gap: 24px; flex-wrap: wrap;
+            font-size: 11px; color: #555; margin-bottom: 18px;
+            padding: 8px 12px; background: #f7f7f7; border-radius: 4px;
+            border-left: 3px solid #444;
+        }
+        .rpt-meta-bar span { white-space: nowrap; }
+        .rpt-section { margin-bottom: 18px; }
+        .rpt-section-title {
+            font-size: 13px; font-weight: 700; color: #222; letter-spacing: 2px;
+            border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .rpt-stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+            margin-bottom: 4px;
+        }
+        .rpt-stat {
+            text-align: center; padding: 8px 4px;
+            border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;
+        }
+        .rpt-stat .rs-val { font-size: 18px; font-weight: 700; color: #111; }
+        .rpt-stat .rs-label { font-size: 9px; color: #777; margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .rpt-chart-img { width: 100%; height: auto; display: block; border: 1px solid #e8e8e8; border-radius: 4px; }
+        .rpt-advice {
+            padding: 10px 14px; background: #f9f9f6; border: 1px solid #e8e5d8;
+            border-radius: 4px; font-size: 12px; color: #444; line-height: 1.7;
+        }
+        .rpt-advice strong { color: #222; }
+        .rpt-footer {
+            margin-top: 24px; padding-top: 10px; border-top: 1px solid #ddd;
+            font-size: 9px; color: #999; text-align: right; letter-spacing: 0.5px;
+        }
+        /* 历史对比报告表格 */
+        .rpt-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 4px; }
+        .rpt-table th { background: #f0f0f0; color: #333; font-weight: 600; padding: 5px 6px; text-align: center; border: 1px solid #ddd; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .rpt-table td { padding: 4px 6px; text-align: center; border: 1px solid #e8e8e8; color: #333; }
+        .rpt-table tr:nth-child(even) td { background: #fafafa; }
+        .rpt-trend-box {
+            padding: 10px 14px; background: #f9f9f6; border: 1px solid #e8e5d8;
+            border-radius: 4px; font-size: 12px; color: #444; line-height: 1.7;
+            display: flex; align-items: flex-start; gap: 12px;
+        }
+        .rpt-trend-arrow {
+            font-size: 28px; font-weight: 700; color: #333; line-height: 1;
+            flex-shrink: 0; min-width: 30px; text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -511,13 +625,7 @@
         <h1>DREAMCORE</h1>
         <p>用注意力驱动你的梦境</p>
         <button class="start-btn" id="start-btn">开始奔跑</button>
-        <div id="subject-bar">
-            <span>被试</span>
-            <select id="subject-select" class="attn-select"></select>
-            <input id="subject-new-name" class="attn-input" placeholder="新被试姓名" maxlength="16">
-            <button id="subject-add-btn" class="mini-btn">录入</button>
-            <button id="history-open-btn" class="mini-btn">历史报告</button>
-        </div>
+        <button class="intro-history-btn" id="history-open-btn">历史报告</button>
     </div>
     <div id="pause-overlay"><span>已暂停</span></div>
 
@@ -589,9 +697,17 @@
             <button class="action-btn gold" id="export-pdf-btn">导出 PDF</button>
             <button class="action-btn primary" id="history-btn">历史对比</button>
         </div>
+        <!-- 玩家录入面板：右下角隐蔽 -->
+        <div id="player-input-panel">
+            <div id="player-saved-hint" style="display:none;">✓ 已归档</div>
+            <div id="player-input-row">
+                <input id="player-name-input" class="player-input" placeholder="输入玩家名" maxlength="16" autocomplete="off">
+                <button class="player-save-btn" id="player-save-btn">归档</button>
+            </div>
+        </div>
     </div>
 
-    <!-- 历史对比报告浮层（同一被试多次测试的横向对比） -->
+    <!-- 历史对比报告浮层（同一玩家多次测试的横向对比） -->
     <div id="history-overlay">
         <div id="history-card">
             <div id="history-header">
@@ -600,11 +716,11 @@
                     <div id="history-meta"></div>
                 </div>
                 <div id="history-subject-row">
-                    <span>被试</span>
+                    <span>玩家</span>
                     <select id="history-subject-select" class="attn-select"></select>
                 </div>
             </div>
-            <div id="history-empty">该被试暂无测试记录，完成一次游戏即可自动存档</div>
+            <div id="history-empty">该玩家暂无测试记录，完成一次游戏即可自动存档</div>
             <div id="history-content">
                 <div id="history-grid"></div>
                 <canvas id="history-chart" width="640" height="200"></canvas>
@@ -621,7 +737,7 @@
             </div>
             <div class="ending-actions">
                 <div style="display:flex; gap:8px;">
-                    <button class="action-btn danger" id="history-delete-subject-btn" title="删除该被试的所有记录">删除被试</button>
+                    <button class="action-btn danger" id="history-delete-subject-btn" title="删除该玩家的所有记录">删除玩家</button>
                     <button class="action-btn danger" id="history-clear-all-btn" title="清空全部历史记录">清空全部</button>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -641,6 +757,11 @@
                 <button class="action-btn danger" id="confirm-ok-btn">确 认</button>
             </div>
         </div>
+    </div>
+
+    <!-- PDF 正式报告渲染区（隐藏，白底 A4 比例） -->
+    <div id="pdf-render-area">
+        <div id="pdf-page"></div>
     </div>
 
     <!-- PDF导出加载遮罩 -->
@@ -2510,30 +2631,32 @@
             document.getElementById('advice-grade-tag').textContent = grade;
             document.getElementById('advice-text').textContent = advice;
 
-            // 保存历史记录到 localStorage（按当前被试归档），并把被试名并入报告抬头
+            // 暂存记录数据，等待玩家在结束界面录入名字后再保存
             let histSubjName = '';
-            try {
-                const subj = histSaveRecord({
-                    id: 'r' + Date.now(), time: Date.now(), period: period,
-                    durationMs: durMs, avg: +avg.toFixed(1), max: Math.round(max), min: Math.round(min),
-                    std: +std.toFixed(1), stability: stability,
-                    highPct: pct(highT), midPct: pct(midT), lowPct: pct(lowT),
-                    distract: distract, hits: hitCount, score: score, coins: coinCount, grade: grade,
-                    samples: samples.map(v => Math.round(v))
-                });
-                histSubjName = subj ? subj.name : '';
-                if (histSubjName) {
-                    document.getElementById('report-meta').textContent =
-                        '被试 ' + histSubjName + ' · ' + dateStr + ' · 检测时长 ' + durStr + ' · 采样 ' + samples.length + ' 次';
-                }
-            } catch (e) { console.warn('[历史记录] 保存失败', e); }
+            window._pendingRecord = {
+                id: 'r' + Date.now(), time: Date.now(), period: period,
+                durationMs: durMs, avg: +avg.toFixed(1), max: Math.round(max), min: Math.round(min),
+                std: +std.toFixed(1), stability: stability,
+                highPct: pct(highT), midPct: pct(midT), lowPct: pct(lowT),
+                distract: distract, hits: hitCount, score: score, coins: coinCount, grade: grade,
+                samples: samples.map(v => Math.round(v)),
+                advice: advice, dateStr: dateStr, durStr: durStr, sampleCount: samples.length
+            };
+            window._recordSaved = false;
+            // 重置玩家录入面板
+            var pInput = document.getElementById('player-name-input');
+            var pHint = document.getElementById('player-saved-hint');
+            var pRow = document.getElementById('player-input-row');
+            if (pInput) { pInput.value = ''; pInput.disabled = false; pInput.placeholder = '输入玩家名'; }
+            if (pHint) pHint.style.display = 'none';
+            if (pRow) pRow.style.display = 'flex';
 
             // 文本版报告（供保存）
             reportText = [
                 '================================',
                 '      ' + period + '注意力检测报告',
                 '================================',
-                '被试: ' + (histSubjName || '未命名被试'),
+                '玩家: （待归档）',
                 '检测时间: ' + dateStr,
                 '检测时长: ' + durStr + '（采样 ' + samples.length + ' 次）',
                 '',
@@ -2621,12 +2744,15 @@
             setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
         }
 
-        document.getElementById('restart-btn').addEventListener('click', () => { location.reload(); });
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            // 若本轮记录尚未归档，自动存为"未命名玩家"
+            if (window._pendingRecord && !window._recordSaved) {
+                try { savePendingRecord(''); } catch (e) { }
+            }
+            location.reload();
+        });
         document.getElementById('save-report-btn').addEventListener('click', saveAttentionReport);
-        document.getElementById('export-pdf-btn').addEventListener('click', () => exportElementAsPDF(
-            document.getElementById('report-card'),
-            '注意力检测报告_' + formatDateForFile(new Date())
-        ));
+        document.getElementById('export-pdf-btn').addEventListener('click', exportSingleReportPDF);
 
         // 日期格式化工具（文件名用）
         function formatDateForFile(d) {
@@ -2635,53 +2761,333 @@
                 '_' + p(d.getHours()) + p(d.getMinutes());
         }
 
-        // 通用 PDF 导出：将指定 DOM 元素截图后写入 PDF 并下载
-        async function exportElementAsPDF(element, filename) {
-            if (!element) return;
-            const loading = document.getElementById('pdf-loading');
+        // ===== 浅色主题注意力曲线图（为 PDF 报告绘制） =====
+        function drawLightChart(samples, width, height) {
+            const cv = document.createElement('canvas');
+            cv.width = width; cv.height = height;
+            const ctx = cv.getContext('2d');
+            const W = width, H = height;
+            const padL = 40, padR = 14, padT = 14, padB = 24;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const yOf = v => padT + plotH * (1 - v / 100);
+
+            // 白色背景
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+
+            // 区间底色（极浅）
+            ctx.fillStyle = 'rgba(76,175,80,0.06)'; ctx.fillRect(padL, yOf(100), plotW, yOf(70) - yOf(100));
+            ctx.fillStyle = 'rgba(255,193,7,0.05)'; ctx.fillRect(padL, yOf(70), plotW, yOf(30) - yOf(70));
+            ctx.fillStyle = 'rgba(244,67,54,0.04)'; ctx.fillRect(padL, yOf(30), plotW, yOf(0) - yOf(30));
+
+            // 网格
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+            [0, 30, 70, 100].forEach(v => {
+                ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 0.8;
+                ctx.beginPath(); ctx.moveTo(padL, yOf(v)); ctx.lineTo(W - padR, yOf(v)); ctx.stroke();
+                ctx.fillStyle = '#888';
+                ctx.fillText(v + '%', padL - 4, yOf(v));
+            });
+            ctx.textAlign = 'center'; ctx.fillStyle = '#888';
+            ctx.fillText('时间 →', W / 2, H - 6);
+
+            if (samples.length < 2) {
+                ctx.fillStyle = '#aaa'; ctx.font = '13px sans-serif';
+                ctx.fillText('采样数据不足', W / 2, H / 2);
+                return cv;
+            }
+
+            const xOf = i => padL + plotW * (i / (samples.length - 1));
+
+            // 折线填充
+            const grad = ctx.createLinearGradient(0, padT + plotH, 0, padT);
+            grad.addColorStop(0, 'rgba(76,175,80,0.02)');
+            grad.addColorStop(1, 'rgba(76,175,80,0.18)');
+            ctx.beginPath();
+            ctx.moveTo(xOf(0), yOf(samples[0]));
+            for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
+            ctx.lineTo(xOf(samples.length - 1), yOf(0)); ctx.lineTo(xOf(0), yOf(0)); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+
+            // 折线
+            ctx.beginPath();
+            ctx.moveTo(xOf(0), yOf(samples[0]));
+            for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
+            ctx.strokeStyle = '#388E3C'; ctx.lineWidth = 1.8; ctx.stroke();
+
+            return cv;
+        }
+
+        // ===== 构建单次报告正式 HTML =====
+        function buildSingleReportHTML(rec, playerName) {
+            const name = playerName || '未命名玩家';
+            const items = [
+                [rec.avg + '%', '平均注意力'], [rec.max + '%', '最高注意力'],
+                [rec.min + '%', '最低注意力'], [rec.stability, '稳定度'],
+                [rec.highPct + '%', '高专注 >70'], [rec.midPct + '%', '中等 30~70'],
+                [rec.distract + ' 次', '走神次数'], [rec.hits + ' 次', '障碍碰撞']
+            ];
+            const statsHTML = items.map(function(i) {
+                return '<div class="rpt-stat"><div class="rs-val">' + i[0] + '</div><div class="rs-label">' + i[1] + '</div></div>';
+            }).join('');
+
+            return '<div class="rpt-header">' +
+                '<div class="rpt-header-left">' +
+                    '<div class="rpt-title">' + rec.period + '注意力检测报告</div>' +
+                    '<div class="rpt-subtitle">DREAMCORE ATTENTION REPORT</div>' +
+                '</div>' +
+                '<div class="rpt-grade">' + rec.grade + '</div>' +
+            '</div>' +
+            '<div class="rpt-meta-bar">' +
+                '<span>玩家：' + name + '</span>' +
+                '<span>时间：' + rec.dateStr + '</span>' +
+                '<span>时长：' + rec.durStr + '</span>' +
+                '<span>采样：' + rec.sampleCount + ' 次</span>' +
+                '<span>得分：' + rec.score + ' · 金币 ' + rec.coins + '</span>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">核心数据</div>' +
+                '<div class="rpt-stats-grid">' + statsHTML + '</div>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">注意力曲线</div>' +
+                '<div id="rpt-chart-slot"></div>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">评级与建议</div>' +
+                '<div class="rpt-advice"><strong>[' + rec.grade + ']</strong> ' + rec.advice + '</div>' +
+            '</div>' +
+            '<div class="rpt-footer">DREAMCORE 梦核跑酷 · 注意力检测系统 · 报告生成时间 ' + new Date().toLocaleString('zh-CN') + '</div>';
+        }
+
+        // ===== 构建历史对比报告正式 HTML =====
+        function buildHistoryReportHTML(recs, subjectName) {
+            var n = recs.length;
+            var first = recs[0], last = recs[n - 1];
+            var avgDelta = +(last.avg - first.avg).toFixed(1);
+            var sign = function(v) { return (v > 0 ? '+' : '') + v; };
+            var totalMin = Math.round(recs.reduce(function(a, r) { return a + (r.durationMs || 0); }, 0) / 60000);
+            var bestGrade = ['S','A','B','C'].find(function(g) { return recs.some(function(r){return r.grade===g;}); }) || '-';
+            var avgDistract = (recs.reduce(function(a, r) { return a + (r.distract || 0); }, 0) / n).toFixed(1);
+
+            var sumItems = [
+                [n + ' 次', '测试次数'], [first.avg + '→' + last.avg + '%', '平均注意力 (' + sign(avgDelta) + ')'],
+                [bestGrade, '最佳评级'], [avgDistract + ' 次', '场均走神'],
+                [totalMin + ' 分钟', '累计训练'], [Math.max.apply(null, recs.map(function(r){return r.max;})) + '%', '历史最高'],
+                [first.stability + '→' + last.stability, '稳定度变化'],
+                [String(Math.max.apply(null, recs.map(function(r){return r.score;}))), '最高得分']
+            ];
+            var statsHTML = sumItems.map(function(i) {
+                return '<div class="rpt-stat"><div class="rs-val">' + i[0] + '</div><div class="rs-label">' + i[1] + '</div></div>';
+            }).join('');
+
+            // 线性回归趋势
+            var ys = recs.map(function(r){return r.avg;});
+            var xm = (n-1)/2, ym = ys.reduce(function(a,b){return a+b;},0)/n;
+            var num = 0, den = 0;
+            ys.forEach(function(y,i){ num += (i-xm)*(y-ym); den += (i-xm)*(i-xm); });
+            var slope = den ? num/den : 0;
+            var arrow, trendMsg;
+            if (n < 2) { arrow = '·'; trendMsg = '已记录 1 次测试，再完成一次即可生成趋势对比。'; }
+            else if (slope >= 2) { arrow = '↑'; trendMsg = '注意力水平呈明显上升趋势（平均每次 +' + slope.toFixed(1) + '%），训练效果显著。'; }
+            else if (slope >= 0.5) { arrow = '↗'; trendMsg = '注意力水平略有提升（平均每次 +' + slope.toFixed(1) + '%），训练正在起效。'; }
+            else if (slope > -0.5) { arrow = '→'; trendMsg = '注意力水平基本持平，可尝试调整训练时段或增加频率后再观察。'; }
+            else { arrow = '↘'; trendMsg = '注意力水平有所下降（平均每次 ' + slope.toFixed(1) + '%），建议检查作息与测试环境。'; }
+
+            // 表格
+            var pad2 = function(nn){return String(nn).padStart(2,'0');};
+            var fmtD = function(ts){ var dd=new Date(ts); return dd.getFullYear()+'-'+pad2(dd.getMonth()+1)+'-'+pad2(dd.getDate())+' '+pad2(dd.getHours())+':'+pad2(dd.getMinutes()); };
+            var tableRows = recs.map(function(r,i){
+                return '<tr><td>'+(i+1)+'</td><td>'+fmtD(r.time)+'</td><td>'+(r.period||'-')+'</td><td>'+
+                    (Math.round((r.durationMs||0)/6000)/10)+'分</td><td>'+r.avg+'%</td><td>'+r.stability+
+                    '</td><td>'+r.distract+'</td><td>'+r.grade+'</td></tr>';
+            }).join('');
+
+            var dateRange = fmtD(first.time) + ' ~ ' + fmtD(last.time);
+
+            return '<div class="rpt-header">' +
+                '<div class="rpt-header-left">' +
+                    '<div class="rpt-title">注意力横向对比报告</div>' +
+                    '<div class="rpt-subtitle">DREAMCORE ATTENTION TREND REPORT</div>' +
+                '</div>' +
+                '<div class="rpt-grade" style="font-size:36px;">' + bestGrade + '</div>' +
+            '</div>' +
+            '<div class="rpt-meta-bar">' +
+                '<span>玩家：' + subjectName + '</span>' +
+                '<span>共 ' + n + ' 次测试</span>' +
+                '<span>' + dateRange + '</span>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">汇总数据</div>' +
+                '<div class="rpt-stats-grid">' + statsHTML + '</div>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">趋势分析</div>' +
+                '<div class="rpt-trend-box">' +
+                    '<div class="rpt-trend-arrow">' + arrow + '</div>' +
+                    '<div>' + trendMsg + '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">测试明细</div>' +
+                '<table class="rpt-table">' +
+                    '<thead><tr><th>#</th><th>日期</th><th>时段</th><th>时长</th><th>平均注意力</th><th>稳定度</th><th>走神</th><th>评级</th></tr></thead>' +
+                    '<tbody>' + tableRows + '</tbody>' +
+                '</table>' +
+            '</div>' +
+            '<div class="rpt-section">' +
+                '<div class="rpt-section-title">趋势曲线</div>' +
+                '<div id="rpt-chart-slot"></div>' +
+            '</div>' +
+            '<div class="rpt-footer">DREAMCORE 梦核跑酷 · 注意力检测系统 · 报告生成时间 ' + new Date().toLocaleString('zh-CN') + '</div>';
+        }
+
+        // ===== 浅色趋势曲线（历史对比报告用） =====
+        function drawLightTrendChart(recs, width, height) {
+            var cv = document.createElement('canvas');
+            cv.width = width; cv.height = height;
+            var ctx = cv.getContext('2d');
+            var W = width, H = height;
+            var padL = 40, padR = 14, padT = 26, padB = 32;
+            var plotW = W - padL - padR, plotH = H - padT - padB;
+            var yOf = function(v){ return padT + plotH * (1 - v / 100); };
+            var n = recs.length;
+            var xOf = function(i){ return n===1 ? padL + plotW/2 : padL + plotW * (i / (n - 1)); };
+
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+            [0,30,70,100].forEach(function(v){
+                ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 0.8;
+                ctx.beginPath(); ctx.moveTo(padL, yOf(v)); ctx.lineTo(W - padR, yOf(v)); ctx.stroke();
+                ctx.fillStyle = '#888'; ctx.fillText(v + '%', padL - 4, yOf(v));
+            });
+            ctx.textAlign = 'center'; ctx.fillStyle = '#888';
+            var step = Math.ceil(n / 10);
+            for (var i = 0; i < n; i += step) ctx.fillText(String(i+1), xOf(i), padT + plotH + 5);
+            ctx.fillText('测试次序 →', W/2, H - 8);
+
+            // 稳定度（灰虚线）
+            ctx.strokeStyle = '#bbb'; ctx.setLineDash([4,3]); ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            recs.forEach(function(r,i){ i ? ctx.lineTo(xOf(i), yOf(r.stability)) : ctx.moveTo(xOf(i), yOf(r.stability)); });
+            ctx.stroke(); ctx.setLineDash([]);
+
+            // 平均注意力（绿色实线）
+            ctx.strokeStyle = '#388E3C'; ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            recs.forEach(function(r,i){ i ? ctx.lineTo(xOf(i), yOf(r.avg)) : ctx.moveTo(xOf(i), yOf(r.avg)); });
+            ctx.stroke();
+
+            // 数据点
+            recs.forEach(function(r,i){
+                ctx.fillStyle = '#388E3C'; ctx.beginPath(); ctx.arc(xOf(i), yOf(r.avg), 3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(xOf(i), yOf(r.stability), 2.4, 0, Math.PI*2); ctx.fill();
+            });
+
+            // 图例
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#388E3C'; ctx.fillRect(padL + 4, 10, 14, 3);
+            ctx.fillStyle = '#555'; ctx.fillText('平均注意力', padL + 22, 12);
+            ctx.fillStyle = '#bbb'; ctx.fillRect(padL + 102, 10, 14, 3);
+            ctx.fillStyle = '#555'; ctx.fillText('稳定度', padL + 120, 12);
+
+            return cv;
+        }
+
+        // ===== 等待图片加载完成 =====
+        function waitForImages(container) {
+            var imgs = container.querySelectorAll('img');
+            var promises = [];
+            for (var i = 0; i < imgs.length; i++) {
+                if (imgs[i].complete && imgs[i].naturalWidth > 0) continue;
+                promises.push(new Promise(function(resolve) {
+                    var im = imgs[i];
+                    im.onload = function() { resolve(); };
+                    im.onerror = function() { resolve(); }; // 即使失败也继续
+                    // 重新触发加载（若 src 已设置但尚未 load）
+                    if (im.src) { var s = im.src; im.src = s; }
+                }));
+            }
+            return Promise.all(promises);
+        }
+
+        // ===== 通用 PDF 生成：将渲染区内容截图写入 A4 PDF =====
+        async function renderAndExportPDF(filename) {
+            var loading = document.getElementById('pdf-loading');
             loading.classList.add('active');
-
             try {
-                // 等待一帧确保样式稳定
-                await new Promise(r => requestAnimationFrame(r));
+                var page = document.getElementById('pdf-page');
+                // 确保所有图片加载完成
+                await waitForImages(page);
+                // 确保字体加载完成（Google Fonts）
+                if (document.fonts && document.fonts.ready) {
+                    try { await document.fonts.ready; } catch(e) {}
+                }
+                // 多等一帧，确保布局稳定
+                await new Promise(function(r){ setTimeout(r, 150); });
 
-                const canvas = await html2canvas(element, {
-                    backgroundColor: '#0f1318',
+                var canvas = await html2canvas(page, {
+                    backgroundColor: '#ffffff',
                     scale: 2,
                     useCORS: true,
                     logging: false,
-                    // 忽略 backdrop-filter（html2canvas 不支持）
+                    width: 794,
+                    windowWidth: 794,
+                    // 防止截取到空画布
                     onclone: function(doc) {
-                        // 给克隆体中的卡片加上不透明背景，替代 backdrop-filter
-                        const card = doc.getElementById(element.id);
-                        if (card) {
-                            card.style.backdropFilter = 'none';
-                            card.style.webkitBackdropFilter = 'none';
-                            card.style.background = 'rgba(16,20,26,0.95)';
-                        }
+                        var p = doc.getElementById('pdf-page');
+                        if (p) p.style.opacity = '1';
                     }
                 });
 
-                const { jsPDF } = window.jspdf;
-                const imgData = canvas.toDataURL('image/png');
+                // 安全检查：画布不能为空
+                if (canvas.width < 10 || canvas.height < 10) {
+                    throw new Error('渲染画布尺寸异常 (' + canvas.width + 'x' + canvas.height + ')');
+                }
 
-                // A4 横向：宽 297mm，高 210mm
-                const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-                const pdfW = pdf.internal.pageSize.getWidth();
-                const pdfH = pdf.internal.pageSize.getHeight();
-                const margin = 8;
-                const availW = pdfW - margin * 2;
-                const availH = pdfH - margin * 2;
+                var jsPDFInst = window.jspdf.jsPDF;
+                var pdf = new jsPDFInst({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                var pdfW = pdf.internal.pageSize.getWidth();   // 210mm
+                var pdfH = pdf.internal.pageSize.getHeight();  // 297mm
+                var margin = 0;
+                var imgW = pdfW - margin * 2;
+                var imgH = canvas.height * imgW / canvas.width;
+                // 使用 JPEG 避免 PNG 解析问题，质量 0.95
+                var imgFormat = 'JPEG';
+                var imgQuality = 0.95;
+                var imgData = canvas.toDataURL('image/jpeg', imgQuality);
 
-                const imgW = canvas.width;
-                const imgH = canvas.height;
-                const ratio = Math.min(availW / imgW, availH / imgH);
-                const w = imgW * ratio;
-                const h = imgH * ratio;
-                const x = (pdfW - w) / 2;
-                const y = (pdfH - h) / 2;
-
-                pdf.addImage(imgData, 'PNG', x, y, w, h);
+                // 如果内容不超过一页
+                var pageContentH = pdfH - margin * 2;
+                if (imgH <= pageContentH + 0.5) {
+                    pdf.addImage(imgData, imgFormat, margin, margin, imgW, imgH, undefined, 'FAST');
+                } else {
+                    // 多页：按比例截取
+                    var totalPages = Math.ceil(imgH / pageContentH);
+                    for (var p = 0; p < totalPages; p++) {
+                        if (p > 0) pdf.addPage();
+                        var srcY = Math.floor(p * pageContentH * canvas.width / imgW);
+                        var srcH = Math.min(
+                            Math.floor(pageContentH * canvas.width / imgW),
+                            canvas.height - srcY
+                        );
+                        if (srcH < 2) continue; // 跳过空页
+                        var sliceCv = document.createElement('canvas');
+                        sliceCv.width = canvas.width;
+                        sliceCv.height = srcH;
+                        var sctx = sliceCv.getContext('2d');
+                        sctx.fillStyle = '#fff';
+                        sctx.fillRect(0, 0, sliceCv.width, sliceCv.height);
+                        sctx.drawImage(canvas, 0, -srcY);
+                        var sliceH = srcH * imgW / canvas.width;
+                        pdf.addImage(
+                            sliceCv.toDataURL('image/jpeg', imgQuality),
+                            imgFormat, margin, margin, imgW, sliceH, undefined, 'FAST'
+                        );
+                    }
+                }
                 pdf.save(filename + '.pdf');
             } catch (e) {
                 console.error('[PDF导出] 失败', e);
@@ -2689,6 +3095,54 @@
             } finally {
                 loading.classList.remove('active');
             }
+        }
+
+        // ===== 导出单次报告 PDF =====
+        async function exportSingleReportPDF() {
+            var rec = window._pendingRecord;
+            if (!rec) { alert('暂无可导出的报告数据'); return; }
+            var playerName = '（待归档）';
+            if (window._recordSaved) {
+                var db = histLoad();
+                var subj = db.subjects.find(function(s){ return s.id === rec.subjectId; });
+                if (subj) playerName = subj.name;
+            }
+            var page = document.getElementById('pdf-page');
+            page.innerHTML = buildSingleReportHTML(rec, playerName);
+            // 绘制浅色图表并插入
+            var chartCv = drawLightChart(rec.samples || [], 690, 180);
+            var chartSlot = document.getElementById('rpt-chart-slot');
+            if (chartSlot) {
+                var img = document.createElement('img');
+                img.className = 'rpt-chart-img';
+                chartSlot.appendChild(img);
+                // 先挂到 DOM，再设置 src（确保 load 事件触发）
+                img.src = chartCv.toDataURL('image/jpeg', 0.95);
+            }
+            await renderAndExportPDF(rec.period + '注意力检测报告_' + formatDateForFile(new Date(rec.time)));
+        }
+
+        // ===== 导出历史对比报告 PDF =====
+        async function exportHistoryReportPDF() {
+            var sel = document.getElementById('history-subject-select');
+            var sid = sel.value;
+            if (!sid) { alert('请先选择要导出的玩家'); return; }
+            var sname = sel.options[sel.selectedIndex].textContent;
+            var db = histLoad();
+            var recs = db.records.filter(function(r){ return r.subjectId === sid; }).sort(function(a,b){ return a.time - b.time; });
+            if (!recs.length) { alert('该玩家暂无测试记录'); return; }
+            var page = document.getElementById('pdf-page');
+            page.innerHTML = buildHistoryReportHTML(recs, sname);
+            // 绘制趋势曲线
+            var chartCv = drawLightTrendChart(recs, 690, 200);
+            var chartSlot = document.getElementById('rpt-chart-slot');
+            if (chartSlot) {
+                var img = document.createElement('img');
+                img.className = 'rpt-chart-img';
+                chartSlot.appendChild(img);
+                img.src = chartCv.toDataURL('image/jpeg', 0.95);
+            }
+            await renderAndExportPDF('注意力对比报告_' + sname + '_' + formatDateForFile(new Date()));
         }
 
         // ==================== 报告历史记录（localStorage） ====================
@@ -2711,73 +3165,89 @@
                 p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
         }
 
-        // ---- 被试录入与选择（开场界面） ----
-        function refreshSubjectSelect() {
-            const db = histLoad();
-            const sel = document.getElementById('subject-select');
-            sel.innerHTML = '';
-            const none = document.createElement('option');
-            none.value = ''; none.textContent = '未选择被试';
-            sel.appendChild(none);
-            db.subjects.forEach(s => {
-                const o = document.createElement('option');
-                o.value = s.id; o.textContent = s.name;
-                if (s.id === db.currentSubjectId) o.selected = true;
-                sel.appendChild(o);
-            });
-        }
-        document.getElementById('subject-select').addEventListener('change', function () {
-            const db = histLoad();
-            db.currentSubjectId = this.value || null;
-            histSave(db);
-        });
-        document.getElementById('subject-add-btn').addEventListener('click', () => {
-            const input = document.getElementById('subject-new-name');
-            const name = input.value.trim();
-            if (!name) { input.focus(); return; }
-            const db = histLoad();
-            let subj = db.subjects.find(s => s.name === name);
-            if (!subj) { subj = { id: 's' + Date.now(), name: name, createdAt: Date.now() }; db.subjects.push(subj); }
-            db.currentSubjectId = subj.id;
-            histSave(db);
-            input.value = '';
-            refreshSubjectSelect();
-        });
-        refreshSubjectSelect();
-
-        // ---- 保存一条测试记录（generateAttentionReport 调用），返回归档到的被试 ----
-        function histSaveRecord(rec) {
-            const db = histLoad();
-            let subj = db.subjects.find(s => s.id === db.currentSubjectId);
-            if (!subj) { // 未录入被试时自动归档到"未命名被试"
-                subj = db.subjects.find(s => s.name === '未命名被试');
-                if (!subj) { subj = { id: 's' + Date.now(), name: '未命名被试', createdAt: Date.now() }; db.subjects.push(subj); }
-                db.currentSubjectId = subj.id;
-            }
-            rec.subjectId = subj.id;
-            db.records.push(rec);
-            histSave(db);
-            return subj;
-        }
-
-        // ---- 历史对比报告浮层 ----
-        function openHistory(preferId) {
+        // ---- 刷新历史浮层中的玩家下拉 ----
+        function refreshHistorySubjectSelect() {
             const db = histLoad();
             const sel = document.getElementById('history-subject-select');
+            if (!sel) return;
+            const current = sel.value;
             sel.innerHTML = '';
             if (!db.subjects.length) {
                 const o = document.createElement('option');
-                o.value = ''; o.textContent = '暂无被试';
+                o.value = ''; o.textContent = '暂无玩家';
                 sel.appendChild(o);
+                return;
             }
             db.subjects.forEach(s => {
                 const o = document.createElement('option');
                 o.value = s.id; o.textContent = s.name;
                 sel.appendChild(o);
             });
-            const target = preferId || db.currentSubjectId || (db.subjects[0] && db.subjects[0].id) || '';
-            sel.value = target;
-            renderHistory(target);
+            // 保持之前的选择，若不存在则选第一个
+            if (db.subjects.some(s => s.id === current)) sel.value = current;
+        }
+
+        // ---- 玩家录入面板：游戏结束后录入并归档 ----
+        // 将暂存的记录保存到指定玩家名下
+        function savePendingRecord(playerName) {
+            if (!window._pendingRecord || window._recordSaved) return;
+            const name = (playerName || '').trim() || '未命名玩家';
+            const db = histLoad();
+            let subj = db.subjects.find(s => s.name === name);
+            if (!subj) {
+                subj = { id: 's' + Date.now(), name: name, createdAt: Date.now() };
+                db.subjects.push(subj);
+            }
+            window._pendingRecord.subjectId = subj.id;
+            db.records.push(window._pendingRecord);
+            histSave(db);
+            window._recordSaved = true;
+
+            // 更新报告 meta 显示玩家名
+            var rec = window._pendingRecord;
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+            var d = new Date(rec.time);
+            var dateStr = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
+                ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+            var durMs = rec.durationMs || 0;
+            var durStr = Math.floor(durMs/60000) + '分' + Math.floor((durMs%60000)/1000) + '秒';
+            var samples = rec.samples || [];
+            document.getElementById('report-meta').textContent =
+                '玩家 ' + name + ' · ' + dateStr + ' · 检测时长 ' + durStr + ' · 采样 ' + samples.length + ' 次';
+
+            // 更新文本版报告（供 TXT 导出）
+            var lines = reportText.split('\r\n');
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf('玩家: ') === 0) { lines[i] = '玩家: ' + name; break; }
+            }
+            reportText = lines.join('\r\n');
+
+            // UI 反馈
+            var pInput = document.getElementById('player-name-input');
+            var pHint = document.getElementById('player-saved-hint');
+            var pRow = document.getElementById('player-input-row');
+            if (pInput) pInput.disabled = true;
+            if (pRow) pRow.style.display = 'none';
+            if (pHint) pHint.style.display = 'block';
+        }
+
+        document.getElementById('player-save-btn').addEventListener('click', function () {
+            var name = document.getElementById('player-name-input').value;
+            savePendingRecord(name);
+        });
+        // 回车也能归档
+        document.getElementById('player-name-input').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') savePendingRecord(this.value);
+        });
+
+        // ---- 历史对比报告浮层 ----
+        function openHistory(preferId) {
+            refreshHistorySubjectSelect();
+            const db = histLoad();
+            const sel = document.getElementById('history-subject-select');
+            const target = preferId || (db.subjects[0] && db.subjects[0].id) || '';
+            if (target) sel.value = target;
+            renderHistory(sel.value);
             document.getElementById('history-overlay').classList.add('active');
         }
         document.getElementById('history-subject-select').addEventListener('change', function () { renderHistory(this.value); });
@@ -2788,49 +3258,33 @@
         document.getElementById('history-open-btn').addEventListener('click', () => openHistory(null));
 
         // 历史报告 PDF 导出
-        document.getElementById('history-export-pdf-btn').addEventListener('click', () => exportElementAsPDF(
-            document.getElementById('history-card'),
-            '注意力对比报告_' + formatDateForFile(new Date())
-        ));
+        document.getElementById('history-export-pdf-btn').addEventListener('click', exportHistoryReportPDF);
 
-        // 删除该被试全部记录
+        // 删除该玩家全部记录
         document.getElementById('history-delete-subject-btn').addEventListener('click', () => {
             const sel = document.getElementById('history-subject-select');
             const sid = sel.value;
-            if (!sid) { alert('请先选择要删除的被试'); return; }
+            if (!sid) { alert('请先选择要删除的玩家'); return; }
             const name = sel.options[sel.selectedIndex].textContent;
-            showConfirm('确认删除被试「' + name + '」的所有测试记录？\n此操作不可撤销。', () => {
+            showConfirm('确认删除玩家「' + name + '」的所有测试记录？\n此操作不可撤销。', () => {
                 const db = histLoad();
                 db.records = db.records.filter(r => r.subjectId !== sid);
                 db.subjects = db.subjects.filter(s => s.id !== sid);
                 if (db.currentSubjectId === sid) db.currentSubjectId = null;
                 histSave(db);
-                refreshSubjectSelect();
-                // 刷新被试下拉后重新渲染
-                const newSel = document.getElementById('history-subject-select');
-                newSel.innerHTML = '';
+                refreshHistorySubjectSelect();
                 const db2 = histLoad();
-                db2.subjects.forEach(s => {
-                    const o = document.createElement('option');
-                    o.value = s.id; o.textContent = s.name;
-                    newSel.appendChild(o);
-                });
-                if (db2.subjects.length) {
-                    newSel.value = db2.subjects[0].id;
-                    renderHistory(db2.subjects[0].id);
-                } else {
-                    renderHistory('');
-                }
+                renderHistory(db2.subjects.length ? db2.subjects[0].id : '');
             });
         });
 
         // 清空全部历史记录
         document.getElementById('history-clear-all-btn').addEventListener('click', () => {
-            showConfirm('确认清空全部被试和测试记录？\n此操作不可撤销！', () => {
+            showConfirm('确认清空全部玩家和测试记录？\n此操作不可撤销！', () => {
                 histSave({ subjects: [], currentSubjectId: null, records: [] });
-                refreshSubjectSelect();
+                refreshHistorySubjectSelect();
                 const sel = document.getElementById('history-subject-select');
-                sel.innerHTML = '<option value="">暂无被试</option>';
+                sel.innerHTML = '<option value="">暂无玩家</option>';
                 renderHistory('');
             });
         });
