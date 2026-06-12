@@ -1772,10 +1772,10 @@
             const cv = document.createElement('canvas'); cv.width = 2; cv.height = 512;
             const ctx = cv.getContext('2d');
             const grd = ctx.createLinearGradient(0, 0, 0, 512);
-            grd.addColorStop(0.0, '#001c54');
-            grd.addColorStop(0.2, '#023fa1');
-            grd.addColorStop(0.6, '#26a8ff');
-            grd.addColorStop(1.0, '#26a8ff');
+            grd.addColorStop(0.0, '#5b9fd4');   // 顶部：中等天蓝
+            grd.addColorStop(0.25, '#7cb8e4');  // 上中：明亮但不刺眼
+            grd.addColorStop(0.55, '#b0d8f0');  // 中下：淡蓝
+            grd.addColorStop(1.0, '#d8e8f0');   // 底部：淡蓝灰（非暖白）
             ctx.fillStyle = grd;
             ctx.fillRect(0, 0, 2, 512);
             return new THREE.CanvasTexture(cv);
@@ -1803,17 +1803,20 @@
 
             gScene = new THREE.Scene();
             gScene.background = gMakeBackground();
-            gScene.fog = new THREE.Fog(0x389af2, 5000, 10000);   // 移植自 Game.ts
+            gScene.fog = new THREE.Fog(0xa8cce0, 5000, 12000);   // 蓝灰雾，与天空协调
             gCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 5, 100000);
             gCamera.rotation.x = 5.5 * Math.PI / 180;            // 原相机仰角
             gCenter.set(0, 0, 0);
             gCamState = 'fly';
 
-            // 灯光（AmbientLightComponent 0x0f6eff / DirectionalLightComponent 0xff6222）
-            gScene.add(new THREE.AmbientLight(0x0f6eff, 2.5));
-            gDirLight = new THREE.DirectionalLight(0xff6222, 2.5);
+            // 灯光：暖白环境光（整体提亮）+ 柔和暖色平行光（自然光影层次）
+            gScene.add(new THREE.AmbientLight(0xfff5e6, 2.8));
+            gDirLight = new THREE.DirectionalLight(0xffe8cc, 2.5);
             gScene.add(gDirLight);
             gScene.add(gDirLight.target);
+            // 半球光：天空淡蓝 + 地面暖白，营造自然户外光照层次
+            const hemiLight = new THREE.HemisphereLight(0xc8e0ff, 0xfff0e0, 2.0);
+            gScene.add(hemiLight);
 
             gBuildClouds();
             gBuildBigClouds();
@@ -1826,7 +1829,7 @@
 
             gComposer = new THREE.EffectComposer(renderer);
             gComposer.addPass(new THREE.RenderPass(gScene, gCamera));
-            gComposer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.4, 0.9));
+            gComposer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.45, 0.88));
             gComposer.setSize(window.innerWidth, window.innerHeight);
             gReady = true;
         }
@@ -1847,8 +1850,8 @@
             const mat = new THREE.ShaderMaterial({
                 uniforms: {
                     cloudTexture: { value: null },
-                    color_1: { value: new THREE.Color('#00a2f0') },
-                    color_2: { value: new THREE.Color('#f0f0f5') }
+                    color_1: { value: new THREE.Color('#6aaad4') },
+                    color_2: { value: new THREE.Color('#e8eef4') }
                 },
                 vertexShader: G_CLOUD_VERT, fragmentShader: G_CLOUD_FRAG,
                 transparent: true, depthWrite: false
@@ -1927,7 +1930,7 @@
             ];
             gBigCloudGroup = new THREE.Group();
             const mat = new THREE.MeshBasicMaterial({
-                map: gMakeBigCloudTexture(), color: 0xeaf4ff,
+                map: gMakeBigCloudTexture(), color: 0xeaf0f6,
                 transparent: true, depthWrite: false, fog: false
             });
             for (const d of list) {
@@ -2062,8 +2065,8 @@
 
         function gBuildPillarsFallback() {
             if (gPillars.length) return;
-            const mat = new THREE.MeshLambertMaterial({ color: 0x8aa0d8, emissive: 0x16244e, emissiveIntensity: 0.6 });
-            const capMat = new THREE.MeshLambertMaterial({ color: 0xa8bce8, emissive: 0x1a2a58, emissiveIntensity: 0.5 });
+            const mat = new THREE.MeshLambertMaterial({ color: 0xe8e2d8, emissive: 0xd8d0c4, emissiveIntensity: 0.06 });
+            const capMat = new THREE.MeshLambertMaterial({ color: 0xf0ece4, emissive: 0xe0d8cc, emissiveIntensity: 0.04 });
             for (let i = 0; i < 26; i++) {
                 const h = 900 + Math.random() * 1500;
                 const r = 60 + Math.random() * 110;
@@ -2118,8 +2121,8 @@
         function gBuildRoadFallback() {
             if (gRoadSlabs.length) return;
             const slabGeo = new THREE.BoxGeometry(46, 8, G_ROAD_STEP - 4);
-            const slabMat = new THREE.MeshLambertMaterial({ color: 0xe8ddd0 });
-            const edgeMat = new THREE.MeshLambertMaterial({ color: 0xc9b9a4 });
+            const slabMat = new THREE.MeshLambertMaterial({ color: 0xf0e8dc, emissive: 0xe0d8cc, emissiveIntensity: 0.03 });
+            const edgeMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d4, emissive: 0xd8d0c4, emissiveIntensity: 0.02 });
             for (let i = 0; i < G_ROAD_COUNT; i++) {
                 const g = new THREE.Group();
                 g.add(new THREE.Mesh(slabGeo, slabMat));
@@ -2319,12 +2322,12 @@
             }
         }
 
-        // 跑酷玩法层引用原神场景的打光（Game.ts：环境光0x0f6eff×2.5 + 平行光0xff6222×2.5），
-        // 使角色/障碍/金币与场景色调一致，不再像贴上去的另一层
+        // 跑酷玩法层引用原神场景的打光（暖白环境光 + 柔和暖色平行光），
+        // 使角色/金币与场景色调一致，通透白皙
         function gApplyGenshinLighting() {
-            gsap.to(runnerAmbient.color, { r: 0x0f / 255, g: 0x6e / 255, b: 0xff / 255, duration: 1.2 });
-            gsap.to(runnerAmbient, { intensity: 2.5, duration: 1.2 });
-            gsap.to(runnerDirLight.color, { r: 0xff / 255, g: 0x62 / 255, b: 0x22 / 255, duration: 1.2 });
+            gsap.to(runnerAmbient.color, { r: 0xff / 255, g: 0xf5 / 255, b: 0xe6 / 255, duration: 1.2 });
+            gsap.to(runnerAmbient, { intensity: 2.8, duration: 1.2 });
+            gsap.to(runnerDirLight.color, { r: 0xff / 255, g: 0xe8 / 255, b: 0xcc / 255, duration: 1.2 });
             gsap.to(runnerDirLight, { intensity: 2.5, duration: 1.2 });
             // 与 gDirLight 同方向（gCenter + (10000, 8657, 6000)，等比缩小）
             runnerDirLight.position.set(10, 8.657, 6);
@@ -2396,10 +2399,10 @@
             if (gPropsLoading) return;
             gPropsLoading = true;
             // 共享材质：低饱和石材 + 金边（呼应场景石柱配色）、摩拉金
-            gStoneMat = new THREE.MeshLambertMaterial({ color: 0xb8b0a2 });
-            gStoneDarkMat = new THREE.MeshLambertMaterial({ color: 0x8f887c });
-            gGoldTrimMat = new THREE.MeshStandardMaterial({ color: 0xd9b36c, emissive: 0x8a6a2f, emissiveIntensity: 0.5, metalness: 0.7, roughness: 0.3 });
-            gMoraMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0xcc8a00, emissiveIntensity: 0.55, metalness: 0.85, roughness: 0.2 });
+            gStoneMat = new THREE.MeshLambertMaterial({ color: 0xe8e2d8, emissive: 0xd8d0c4, emissiveIntensity: 0.04 });
+            gStoneDarkMat = new THREE.MeshLambertMaterial({ color: 0xd8d0c4, emissive: 0xc8c0b4, emissiveIntensity: 0.03 });
+            gGoldTrimMat = new THREE.MeshStandardMaterial({ color: 0xf0d080, emissive: 0xc8a050, emissiveIntensity: 0.6, metalness: 0.7, roughness: 0.25 });
+            gMoraMat = new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0xdda800, emissiveIntensity: 0.6, metalness: 0.85, roughness: 0.18 });
             const loader = new THREE.GLTFLoader();
             loader.load(GENSHIN_PROPS_DIR + 'gem_blue.glb', (gltf) => {
                 const rare = gNormalizeProp(gltf.scene, 0.8, false);
