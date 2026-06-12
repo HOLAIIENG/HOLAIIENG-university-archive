@@ -668,8 +668,7 @@
     <button id="debug-genshin" title="调试用：积分直接拉到50%并切入原神场景">⛩ 切换原神场景</button>
     <div class="controls" id="controls-hint">← → / A D - 左右移动 | Space - 跳跃 | P - 暂停</div>
 
-    <!-- 原神场景 HUD（专注力积分50%~100%期间显示，场景由 three.js 直接渲染） -->
-    <div id="genshin-hud">✦ 专注力积分 <span id="genshin-pct">50</span>% / 100%（100% = 800分）· 保持专注，冲向终点之门</div>
+    <!-- 原神场景 HUD：已移除，保持界面干净 -->
 
     <!-- 游戏结束画面 + 注意力检测报告 -->
     <div id="ending">
@@ -2501,9 +2500,8 @@
                     coins.length = 0;
                     gHideRunnerEnvironment();
                     gApplyGenshinLighting();
-                    // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板并叠加场景 HUD
+                    // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板
                     document.getElementById('algorithm-data').classList.remove('visible');
-                    document.getElementById('genshin-hud').style.display = 'block';
                     gsap.to(flash, { opacity: 0, duration: 1.6, delay: 0.3, ease: 'power2.out', onComplete: () => { flash.remove(); } });
                 }
             });
@@ -2516,7 +2514,6 @@
 
             document.getElementById('final-score').textContent = score;
             document.getElementById('final-coins').textContent = coinCount;
-            document.getElementById('genshin-hud').style.display = 'none';
 
             // 隐藏跑酷 HUD（Score/能量条/左侧积分条/操作提示/调试面板），避免与结算报告信息重复
             const hideRunnerHUD = () => {
