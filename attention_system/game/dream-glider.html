@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DREAM GLIDER · 梦境滑翔</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060414; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    .mono { font-family: 'Courier New', monospace; }
+
+    /* HUD */
+    #hud {
+        position: fixed; top: 16px; left: 0; width: 100%; z-index: 10;
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        color: rgba(255,255,255,0.9); font-family: 'Courier New', monospace;
+        pointer-events: none; user-select: none; opacity: 0; transition: opacity 1s ease;
+        text-shadow: 0 0 12px rgba(120,200,255,0.8);
+    }
+    #hud.visible { opacity: 1; }
+    #hud .row { display: flex; gap: 36px; align-items: baseline; font-size: 16px; letter-spacing: 2px; }
+    #hud .row b { font-size: 24px; }
+    #energy-wrap {
+        width: 320px; height: 14px; border-radius: 7px; overflow: hidden;
+        background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+    }
+    #energy-fill {
+        width: 100%; height: 100%; transition: width 0.2s linear;
+        background: linear-gradient(90deg, #ff5e8a, #ffd86b 45%, #6bffc8);
+        box-shadow: 0 0 12px rgba(120,255,200,0.5);
+    }
+    #attn-line { font-size: 12px; letter-spacing: 2px; color: rgba(180,220,255,0.85); }
+
+    /* 连接 / 模拟面板 */
+    #sim-panel {
+        position: fixed; bottom: 18px; left: 18px; z-index: 30;
+        display: flex; align-items: center; gap: 6px;
+        font-family: 'Courier New', monospace; user-select: none;
+    }
+    #ws-dot {
+        width: 34px; height: 34px; border-radius: 50%; border: none; cursor: default;
+        background: rgba(200,160,255,0.15); color: rgba(255,255,255,0.65); font-size: 14px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .sim-btn {
+        padding: 5px 11px; border: 1px solid rgba(255,255,255,0.18); cursor: pointer;
+        background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55);
+        border-radius: 12px; font-size: 10px; font-family: 'Courier New', monospace; transition: all 0.15s;
+    }
+    .sim-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+    .sim-btn.active { background: rgba(120,200,255,0.25); border-color: rgba(120,200,255,0.6); color: #fff; }
+    #sim-val { font-size: 11px; color: rgba(150,210,255,0.7); min-width: 26px; text-align: center; }
+
+    /* 开始 / 结束遮罩 */
+    #overlay {
+        position: fixed; inset: 0; z-index: 50;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(ellipse at 50% 55%, #141033 0%, #07051a 55%, #000 100%);
+        font-family: 'Courier New', monospace; color: #fff; text-align: center;
+        transition: opacity 0.8s ease; user-select: none;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+    #overlay h1 {
+        font-size: clamp(34px, 6.5vw, 64px); font-weight: normal; letter-spacing: 14px;
+        text-shadow: 0 0 28px rgba(110,190,255,0.9), 0 0 70px rgba(160,120,255,0.5);
+        animation: glow 4s ease-in-out infinite;
+    }
+    @keyframes glow { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
+    #overlay .sub { margin-top: 12px; font-size: 15px; letter-spacing: 7px; color: rgba(190,220,255,0.75); }
+    #overlay .desc {
+        margin-top: 38px; font-size: 13px; line-height: 2.3; letter-spacing: 2px;
+        color: rgba(255,255,255,0.65);
+    }
+    #overlay .desc em { font-style: normal; color: #9fd8ff; }
+    #stats { margin-top: 24px; font-size: 16px; letter-spacing: 3px; line-height: 2; color: rgba(255,225,170,0.95); display: none; }
+    #start-btn {
+        margin-top: 40px; padding: 13px 52px; font-size: 16px; letter-spacing: 8px;
+        font-family: 'Courier New', monospace; color: #fff; cursor: pointer;
+        background: rgba(120,200,255,0.12); border: 1px solid rgba(120,200,255,0.5); border-radius: 28px;
+        transition: all 0.25s; text-shadow: 0 0 10px rgba(120,200,255,0.8);
+    }
+    #start-btn:hover { background: rgba(120,200,255,0.3); box-shadow: 0 0 30px rgba(120,200,255,0.4); }
+    #combo-pop {
+        position: fixed; left: 50%; top: 34%; transform: translateX(-50%); z-index: 15;
+        font-family: 'Courier New', monospace; font-size: 30px; letter-spacing: 4px;
+        color: #ffe9a8; text-shadow: 0 0 18px rgba(255,210,110,0.9);
+        opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
+    }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+    <div class="row">
+        <span>SCORE <b id="hud-score">0</b></span>
+        <span>环 <b id="hud-rings">0</b></span>
+        <span>COMBO <b id="hud-combo">x1</b></span>
+    </div>
+    <div id="energy-wrap"><div id="energy-fill"></div></div>
+    <div id="attn-line">⚡ 注意力 <span id="hud-attn">0</span>% · 决定飞行高度与能量消耗</div>
+</div>
+
+<div id="combo-pop"></div>
+
+<div id="sim-panel">
+    <div id="ws-dot" title="数据源连接状态">⚡</div>
+    <span id="sim-val">--</span>
+    <button class="sim-btn active" data-mode="off">OFF</button>
+    <button class="sim-btn" data-mode="low">LOW</button>
+    <button class="sim-btn" data-mode="high">HIGH</button>
+    <button class="sim-btn" data-mode="auto">AUTO</button>
+</div>
+
+<div id="overlay">
+    <h1>DREAM GLIDER</h1>
+    <div class="sub">梦 境 滑 翔</div>
+    <div id="stats"></div>
+    <div class="desc">
+        <em>转头（陀螺仪）</em> 左右滑翔 · <em>注意力</em> 越集中飞得越高，能量消耗越慢<br>
+        <em>点头</em> 触发冲刺（短暂无敌） · 穿过光环得分，撞上暗云损失能量<br>
+        无设备时：← → 移动 · 左下角模拟注意力 · Shift 冲刺
+    </div>
+    <button id="start-btn">起 飞</button>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   DREAM GLIDER —— 梦境滑翔
+   陀螺仪转头控制左右 · 注意力控制飞行高度 · 点头冲刺
+   数据源：ws://localhost:8765（与注意力系统共用协议）
+   ============================================================ */
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ==================== 数据源：WebSocket + 模拟 ==================== */
+const WS_URL = 'ws://localhost:8765';
+let ws = null, wsConnected = false;
+let gyroscope_x = 0, gyroscope_y = 270, gyroscope_z = 170, attention_raw = 0;
+
+// 陀螺仪静息值与阈值（与跑酷游戏一致）
+const GYRO_Z_REST = 170;          // z 静息；>静息转左，<静息转右
+const GYRO_Z_DEADZONE = 5;
+const GYRO_Y_NOD_THRESHOLD = 260; // y 从 >=260 跌破 → 点头 → 冲刺
+let last_gyro_y = 270;
+
+function initWebSocket() {
+    try {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = () => { wsConnected = true; updateWsDot(); };
+        ws.onmessage = (e) => {
+            try {
+                const d = JSON.parse(e.data);
+                gyroscope_x = d.gyroscope_x || 0;
+                gyroscope_y = (d.gyroscope_y !== undefined) ? d.gyroscope_y : 270;
+                gyroscope_z = (d.gyroscope_z !== undefined) ? d.gyroscope_z : 170;
+                const a = (d.attention !== undefined && d.attention !== null) ? d.attention : 0;
+                attention_raw = a > 1 ? a : a * 100;
+            } catch (err) { }
+        };
+        ws.onerror = () => { };
+        ws.onclose = () => { wsConnected = false; updateWsDot(); setTimeout(initWebSocket, 5000); };
+    } catch (e) { }
+}
+function updateWsDot() {
+    const dot = document.getElementById('ws-dot');
+    if (wsConnected) { dot.textContent = '✓'; dot.style.background = 'rgba(100,220,150,0.2)'; dot.style.color = 'rgba(100,220,150,0.85)'; dot.title = '已连接 ' + WS_URL; }
+    else { dot.textContent = '⚡'; dot.style.background = 'rgba(200,160,255,0.15)'; dot.style.color = 'rgba(255,255,255,0.65)'; dot.title = '未连接数据源，使用键盘 + 模拟注意力'; }
+}
+initWebSocket();
+
+// 模拟注意力（无设备调试用）
+let simMode = 'off', simVal = 50, simTarget = 50, simTimer = 0;
+document.querySelectorAll('.sim-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        simMode = btn.dataset.mode;
+        document.querySelectorAll('.sim-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === simMode));
+    });
+});
+function updateSim(dt) {
+    simTimer += dt;
+    if (simTimer > 0.8) {
+        simTimer = 0;
+        let lo = 0, hi = 100;
+        if (simMode === 'low') { lo = 5; hi = 30; }
+        else if (simMode === 'high') { lo = 55; hi = 95; }
+        simTarget = clamp(simTarget + (Math.random() - 0.5) * (hi - lo) * 0.5, lo, hi);
+    }
+    simVal += (simTarget - simVal) * 0.03;
+    document.getElementById('sim-val').textContent = simMode === 'off' ? '--' : simVal.toFixed(0);
+}
+// 当前生效的注意力：设备 > 模拟 > 0
+function currentAttention() {
+    if (wsConnected) return clamp(attention_raw, 0, 100);
+    if (simMode !== 'off') return clamp(simVal, 0, 100);
+    return 0;
+}
+
+/* ==================== 键盘（无设备的兜底操作） ==================== */
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') tryDash();
+    if (e.code === 'Space') e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+/* ==================== 音效（WebAudio 合成） ==================== */
+const AudioFX = {
+    ctx: null, master: null,
+    init() {
+        if (this.ctx) return;
+        try {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.master = this.ctx.createGain();
+            this.master.gain.value = 0.45;
+            this.master.connect(this.ctx.destination);
+        } catch (e) { }
+    },
+    tone(freq, dur, type, vol, slide) {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, t);
+        o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * (slide || 1.5)), t + dur);
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g); g.connect(this.master);
+        o.start(t); o.stop(t + dur);
+    },
+    ring(combo) { this.tone(660 + Math.min(combo, 8) * 60, 0.35, 'sine', 0.25); this.tone(990 + Math.min(combo, 8) * 90, 0.4, 'sine', 0.1); },
+    hit() { this.tone(160, 0.35, 'sawtooth', 0.2, 0.4); },
+    dash() { this.tone(240, 0.5, 'triangle', 0.18, 3.2); },
+    over() { this.tone(440, 1.4, 'sine', 0.2, 0.18); }
+};
+
+/* ==================== 游戏状态 ==================== */
+const FOV = 320;                 // 透视焦距
+const PLAYER_Z = 110;            // 玩家所在深度
+const SPAWN_Z = 2600;            // 物体生成深度
+const WORLD_X = 430;             // 世界横向半幅
+const WORLD_Y_TOP = -280, WORLD_Y_BOTTOM = 300;
+
+const G = {
+    state: 'title',              // title | playing | over
+    t: 0, speed: 520, dist: 0,
+    score: 0, rings: 0, combo: 1, maxCombo: 1,
+    energy: 100,
+    attnSum: 0, attnSamples: 0,  // 结算用平均注意力
+    objects: [],                 // {kind:'ring'|'cloud'|'orb', x, y, z, r, ...}
+    particles: [],
+    stars: [],
+    nextSpawnZ: 800,
+    shake: 0,
+    dashT: 0,                    // >0 冲刺中
+    dashCd: 0,
+};
+
+const player = {
+    x: 0, y: 100, vx: 0,
+    bank: 0,                     // 倾斜角（视觉）
+    trail: [],
+};
+
+function initStars() {
+    G.stars = [];
+    for (let i = 0; i < 130; i++) {
+        G.stars.push({ x: rand(-1.6, 1.6), y: rand(-1, 0.55), z: rand(0.25, 1), tw: rand(0, 6.28) });
+    }
+}
+
+function resetRun() {
+    G.t = 0; G.speed = 520; G.dist = 0;
+    G.score = 0; G.rings = 0; G.combo = 1; G.maxCombo = 1;
+    G.energy = 100; G.attnSum = 0; G.attnSamples = 0;
+    G.objects = []; G.particles = []; G.nextSpawnZ = 900;
+    G.shake = 0; G.dashT = 0; G.dashCd = 0;
+    player.x = 0; player.y = 100; player.vx = 0; player.bank = 0; player.trail = [];
+}
+
+/* ==================== 生成：光环 / 暗云 / 光尘 ==================== */
+function spawnWave() {
+    while (G.nextSpawnZ < SPAWN_Z) {
+        const z = G.nextSpawnZ;
+        const diff = clamp(G.dist / 18000, 0, 1);
+        const x = rand(-WORLD_X * 0.8, WORLD_X * 0.8);
+        // 光环高度全范围分布：高处的环需要高注意力才够得到
+        const y = rand(WORLD_Y_TOP * 0.95, WORLD_Y_BOTTOM * 0.8);
+        G.objects.push({ kind: 'ring', x, y, z, r: lerp(95, 70, diff), passed: false, hue: rand(165, 205) });
+
+        // 难度越高暗云越多
+        const nClouds = Math.random() < 0.35 + diff * 0.4 ? (1 + (Math.random() < diff * 0.5 ? 1 : 0)) : 0;
+        for (let i = 0; i < nClouds; i++) {
+            let cx, cy, tries = 0;
+            do {
+                cx = rand(-WORLD_X, WORLD_X); cy = rand(WORLD_Y_TOP, WORLD_Y_BOTTOM);
+                tries++;
+            } while (Math.hypot(cx - x, cy - y) < 200 && tries < 8);
+            G.objects.push({ kind: 'cloud', x: cx, y: cy, z: z + rand(-160, 160), r: rand(55, 85), hit: false, ph: rand(0, 6.28) });
+        }
+        // 偶尔一串光尘（小加分）
+        if (Math.random() < 0.3) {
+            const ox = rand(-WORLD_X * 0.7, WORLD_X * 0.7), oy = rand(WORLD_Y_TOP * 0.8, WORLD_Y_BOTTOM * 0.7);
+            for (let i = 0; i < 5; i++) G.objects.push({ kind: 'orb', x: ox, y: oy, z: z + 300 + i * 90, r: 14, taken: false });
+        }
+        G.nextSpawnZ += rand(560, 760);
+    }
+}
+
+/* ==================== 冲刺 ==================== */
+function tryDash() {
+    if (G.state !== 'playing' || G.dashT > 0 || G.dashCd > 0) return;
+    G.dashT = 0.6; G.dashCd = 2.2;
+    AudioFX.dash();
+    burst(player.x, player.y, PLAYER_Z, 'rgba(140,230,255,0.9)', 20, 360);
+}
+
+/* ==================== 粒子 ==================== */
+function burst(x, y, z, color, n, spd) {
+    for (let i = 0; i < n; i++) {
+        const a = rand(0, Math.PI * 2);
+        G.particles.push({
+            x, y, z,
+            vx: Math.cos(a) * rand(spd * 0.3, spd), vy: Math.sin(a) * rand(spd * 0.3, spd),
+            life: rand(0.4, 0.9), age: 0, r: rand(3, 7), color,
+        });
+    }
+}
+
+/* ==================== 流程 ==================== */
+const overlay = document.getElementById('overlay');
+const statsEl = document.getElementById('stats');
+
+document.getElementById('start-btn').addEventListener('click', () => {
+    AudioFX.init();
+    resetRun();
+    G.state = 'playing';
+    overlay.classList.add('hidden');
+    document.getElementById('hud').classList.add('visible');
+});
+
+function gameOver() {
+    G.state = 'over';
+    AudioFX.over();
+    const avgAttn = G.attnSamples ? (G.attnSum / G.attnSamples) : 0;
+    setTimeout(() => {
+        overlay.querySelector('h1').textContent = '降 落';
+        overlay.querySelector('.sub').textContent = 'THE DREAM FADES';
+        statsEl.style.display = 'block';
+        statsEl.innerHTML =
+            `得分 ${G.score} · 穿环 ${G.rings} · 最高连击 x${G.maxCombo}<br>` +
+            `平均注意力 ${avgAttn.toFixed(0)}% · 飞行 ${(G.dist / 100).toFixed(0)}m`;
+        document.getElementById('start-btn').textContent = '再 次 起 飞';
+        overlay.classList.remove('hidden');
+    }, 1100);
+}
+
+function popCombo(text) {
+    const el = document.getElementById('combo-pop');
+    el.textContent = text;
+    el.style.opacity = 1; el.style.transform = 'translateX(-50%) scale(1.25)';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = 0; el.style.transform = 'translateX(-50%) scale(1)'; }, 600);
+}
+
+/* ==================== 更新 ==================== */
+function update(dt) {
+    G.t += dt;
+    updateSim(dt);
+
+    // 点头冲刺（陀螺仪 y 下穿阈值的瞬间）
+    if (wsConnected && gyroscope_y < GYRO_Y_NOD_THRESHOLD && last_gyro_y >= GYRO_Y_NOD_THRESHOLD) tryDash();
+    last_gyro_y = gyroscope_y;
+
+    if (G.state !== 'playing') { updateParticles(dt); return; }
+
+    const att = currentAttention();
+    G.attnSum += att; G.attnSamples++;
+
+    // ---- 水平：陀螺仪连续转向（z 偏离静息值 → 横向速度），键盘兜底 ----
+    let steer = 0;
+    if (wsConnected) {
+        // z > 静息 → 转左（x 减小），方向与跑酷换道一致；偏离越大转得越快
+        const dz = gyroscope_z - GYRO_Z_REST;
+        steer = Math.abs(dz) > GYRO_Z_DEADZONE ? clamp(dz, -35, 35) * -14 : 0;
+    }
+    if (keys['ArrowLeft'] || keys['KeyA']) steer = -460;
+    if (keys['ArrowRight'] || keys['KeyD']) steer = 460;
+    player.vx += (steer - player.vx) * Math.min(1, dt * 6);
+    player.x = clamp(player.x + player.vx * dt, -WORLD_X, WORLD_X);
+    player.bank += ((player.vx / 520) * 0.9 - player.bank) * Math.min(1, dt * 5);
+
+    // ---- 垂直：注意力 → 目标高度（越专注飞得越高） ----
+    const targetY = lerp(WORLD_Y_BOTTOM * 0.85, WORLD_Y_TOP * 0.95, att / 100);
+    player.y += (targetY - player.y) * Math.min(1, dt * 1.6);
+
+    // ---- 速度 / 能量 ----
+    const dashMul = G.dashT > 0 ? 2.1 : 1;
+    G.speed = (520 + clamp(G.dist / 100, 0, 260)) * dashMul;
+    G.dist += G.speed * dt;
+    G.dashT = Math.max(0, G.dashT - dt);
+    G.dashCd = Math.max(0, G.dashCd - dt);
+    // 注意力越高能量流失越慢（训练激励核心）
+    const drain = lerp(3.0, 0.45, att / 100);
+    G.energy = clamp(G.energy - drain * dt, 0, 100);
+    if (G.energy <= 0) { gameOver(); return; }
+
+    // ---- 物体推进与碰撞 ----
+    spawnWave();
+    G.nextSpawnZ -= G.speed * dt;
+    for (const o of G.objects) {
+        o.z -= G.speed * dt;
+        if (o.z < PLAYER_Z + 30 && o.z > PLAYER_Z - 30) {
+            const d = Math.hypot(player.x - o.x, player.y - o.y);
+            if (o.kind === 'ring' && !o.passed) {
+                o.passed = true;
+                if (d < o.r * 0.82) {
+                    G.rings++; G.combo = Math.min(G.combo + 1, 9);
+                    G.maxCombo = Math.max(G.maxCombo, G.combo);
+                    const pts = 10 * G.combo;
+                    G.score += pts;
+                    G.energy = clamp(G.energy + 7, 0, 100);
+                    popCombo('+' + pts + (G.combo > 1 ? '  x' + G.combo : ''));
+                    burst(o.x, o.y, PLAYER_Z, 'rgba(150,255,230,0.95)', 22, 320);
+                    AudioFX.ring(G.combo);
+                } else {
+                    if (G.combo > 1) popCombo('COMBO LOST');
+                    G.combo = 1;
+                }
+            } else if (o.kind === 'cloud' && !o.hit && G.dashT <= 0) {
+                if (d < o.r + 18) {
+                    o.hit = true;
+                    G.energy = clamp(G.energy - 22, 0, 100);
+                    G.combo = 1; G.shake = 16;
+                    burst(player.x, player.y, PLAYER_Z, 'rgba(150,110,200,0.9)', 26, 300);
+                    AudioFX.hit();
+                    if (G.energy <= 0) { gameOver(); return; }
+                }
+            } else if (o.kind === 'orb' && !o.taken) {
+                if (d < o.r + 26) {
+                    o.taken = true; G.score += 2;
+                    G.energy = clamp(G.energy + 1.5, 0, 100);
+                    burst(o.x, o.y, PLAYER_Z, 'rgba(255,230,150,0.9)', 8, 200);
+                }
+            }
+        }
+    }
+    G.objects = G.objects.filter(o => o.z > PLAYER_Z - 200 && !(o.kind === 'orb' && o.taken));
+
+    // ---- 拖尾 ----
+    player.trail.unshift({ x: player.x, y: player.y, t: G.t });
+    if (player.trail.length > 22) player.trail.pop();
+
+    updateParticles(dt);
+    G.shake = Math.max(0, G.shake - dt * 40);
+
+    // HUD
+    document.getElementById('hud-score').textContent = G.score;
+    document.getElementById('hud-rings').textContent = G.rings;
+    document.getElementById('hud-combo').textContent = 'x' + G.combo;
+    document.getElementById('hud-attn').textContent = att.toFixed(0);
+    document.getElementById('energy-fill').style.width = G.energy + '%';
+}
+
+function updateParticles(dt) {
+    for (const p of G.particles) {
+        p.age += dt;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+    G.particles = G.particles.filter(p => p.age < p.life);
+}
+
+/* ==================== 渲染 ==================== */
+// 透视投影：世界(x,y,z) → 屏幕
+function project(x, y, z) {
+    const s = FOV / z;
+    return { x: W / 2 + (x - player.x * 0.55) * s, y: H * 0.52 + (y - player.y * 0.35) * s, s };
+}
+
+function draw() {
+    const att = currentAttention();
+    const sx = (Math.random() - 0.5) * G.shake, sy = (Math.random() - 0.5) * G.shake;
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    drawSky(att);
+    drawStars();
+    drawObjects();
+    drawParticles();
+    if (G.state !== 'title') drawPlayer();
+    ctx.restore();
+
+    drawVignette(att);
+}
+
+/* 天空：注意力越高，梦境越亮越清晰 */
+function drawSky(att) {
+    const lift = att / 100; // 0~1
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, `hsl(${248 - lift * 30}, 65%, ${7 + lift * 9}%)`);
+    g.addColorStop(0.55, `hsl(${262 - lift * 40}, 60%, ${16 + lift * 12}%)`);
+    g.addColorStop(1, `hsl(${288 - lift * 50}, 55%, ${24 + lift * 14}%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // 地平线辉光（高注意力时变成金色黎明）
+    const hg = ctx.createRadialGradient(W / 2, H * 0.62, 10, W / 2, H * 0.62, W * 0.55);
+    hg.addColorStop(0, `hsla(${200 + lift * 160}, 90%, ${55 + lift * 20}%, ${0.12 + lift * 0.2})`);
+    hg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hg;
+    ctx.fillRect(0, 0, W, H);
+}
+
+function drawStars() {
+    for (const st of G.stars) {
+        // 星星随飞行缓缓后移，按深度视差
+        st.x -= (player.vx / W) * st.z * 0.016;
+        if (st.x < -1.7) st.x = 1.7; else if (st.x > 1.7) st.x = -1.7;
+        const a = 0.2 + 0.5 * Math.abs(Math.sin(G.t + st.tw));
+        ctx.fillStyle = `rgba(255,255,255,${a * st.z})`;
+        ctx.beginPath();
+        ctx.arc(W / 2 + st.x * W * 0.5, H * 0.5 + st.y * H * 0.55, st.z * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawObjects() {
+    // 远的先画
+    const sorted = [...G.objects].sort((a, b) => b.z - a.z);
+    for (const o of sorted) {
+        if (o.z <= 30) continue;
+        const p = project(o.x, o.y, o.z);
+        const fade = clamp(1 - o.z / SPAWN_Z, 0, 1);
+        if (o.kind === 'ring') drawRing(o, p, fade);
+        else if (o.kind === 'cloud') drawCloud(o, p, fade);
+        else if (o.kind === 'orb' && !o.taken) drawOrb(o, p, fade);
+    }
+}
+
+function drawRing(o, p, fade) {
+    const r = o.r * p.s;
+    if (r < 2) return;
+    const a = (o.passed ? 0.25 : 0.85) * fade;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.strokeStyle = `hsla(${o.hue}, 95%, 70%, ${a})`;
+    ctx.lineWidth = Math.max(2, r * 0.1);
+    ctx.shadowColor = `hsla(${o.hue}, 100%, 70%, ${a})`;
+    ctx.shadowBlur = 22 * p.s * 4;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    // 内圈微光
+    ctx.strokeStyle = `hsla(${o.hue + 30}, 100%, 85%, ${a * 0.5})`;
+    ctx.lineWidth = Math.max(1, r * 0.035);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+}
+
+function drawCloud(o, p, fade) {
+    const r = o.r * p.s;
+    if (r < 2) return;
+    const a = (o.hit ? 0.15 : 0.75) * fade;
+    const wob = Math.sin(G.t * 1.4 + o.ph) * r * 0.06;
+    ctx.save();
+    ctx.translate(p.x, p.y + wob);
+    const g = ctx.createRadialGradient(0, 0, r * 0.15, 0, 0, r * 1.25);
+    g.addColorStop(0, `rgba(70,40,110,${a})`);
+    g.addColorStop(0.7, `rgba(40,22,70,${a * 0.85})`);
+    g.addColorStop(1, 'rgba(30,15,55,0)');
+    ctx.fillStyle = g;
+    for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.ellipse((i - 1) * r * 0.55, Math.sin(i * 2.4 + o.ph) * r * 0.18, r * 0.75, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // 闪烁的紫电
+    if (!o.hit && Math.random() < 0.06) {
+        ctx.strokeStyle = `rgba(200,140,255,${a})`;
+        ctx.lineWidth = Math.max(1, r * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(rand(-r * 0.4, r * 0.4), -r * 0.3);
+        ctx.lineTo(rand(-r * 0.3, r * 0.3), r * 0.1);
+        ctx.lineTo(rand(-r * 0.4, r * 0.4), r * 0.5);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function drawOrb(o, p, fade) {
+    const r = Math.max(2, o.r * p.s * 2.2);
+    const g = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, r);
+    g.addColorStop(0, `rgba(255,245,210,${0.95 * fade})`);
+    g.addColorStop(0.4, `rgba(255,215,130,${0.7 * fade})`);
+    g.addColorStop(1, 'rgba(255,200,100,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawParticles() {
+    for (const pt of G.particles) {
+        const p = project(pt.x, pt.y, PLAYER_Z);
+        const a = 1 - pt.age / pt.life;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(p.x + pt.x * 0.001, p.y, pt.r * a * p.s * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+/* 玩家：流光滑翔者（纸飞机形） */
+function drawPlayer() {
+    const p = project(player.x, player.y, PLAYER_Z);
+    const size = 30 * p.s * 1.1;
+    const dashGlow = G.dashT > 0 ? 1 : 0;
+
+    // 拖尾
+    for (let i = player.trail.length - 1; i >= 1; i--) {
+        const tr = player.trail[i];
+        const tp = project(tr.x, tr.y, PLAYER_Z + i * 14);
+        const a = (1 - i / player.trail.length) * 0.3;
+        ctx.fillStyle = `hsla(${190 + dashGlow * 30}, 100%, ${72 + dashGlow * 15}%, ${a})`;
+        ctx.beginPath();
+        ctx.arc(tp.x, tp.y, Math.max(1, (1 - i / player.trail.length) * size * 0.45), 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(player.bank);
+
+    // 光环
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, size * 2.4);
+    halo.addColorStop(0, `hsla(195, 100%, 80%, ${0.4 + dashGlow * 0.35})`);
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, size * 2.4, 0, Math.PI * 2); ctx.fill();
+
+    // 纸飞机机体
+    ctx.fillStyle = 'rgba(235, 245, 255, 0.95)';
+    ctx.strokeStyle = `hsla(${195 + dashGlow * 40}, 100%, 75%, 0.95)`;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(140,220,255,0.9)';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.85);                 // 机头
+    ctx.lineTo(size * 0.95, size * 0.6);         // 右翼尖
+    ctx.lineTo(0, size * 0.22);                  // 尾中
+    ctx.lineTo(-size * 0.95, size * 0.6);        // 左翼尖
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 中折线
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.85); ctx.lineTo(0, size * 0.22);
+    ctx.strokeStyle = 'rgba(150,190,230,0.7)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+
+    // 冲刺冷却小指示（机体下方细弧）
+    if (G.dashCd > 0 && G.state === 'playing') {
+        const frac = 1 - G.dashCd / 2.2;
+        ctx.strokeStyle = `rgba(140,230,255,${0.5})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y + size * 1.6, size * 0.5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+/* 暗角：注意力低时梦境边缘变暗收缩 */
+function drawVignette(att) {
+    const tight = lerp(0.42, 0.62, att / 100);
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * tight, W / 2, H / 2, Math.max(W, H) * 0.78);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(8,4,22,${lerp(0.78, 0.45, att / 100)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+}
+
+/* ==================== 主循环 ==================== */
+initStars();
+resetRun();
+let lastT = performance.now();
+function loop(now) {
+    const dt = Math.min((now - lastT) / 1000, 1 / 30);
+    lastT = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
