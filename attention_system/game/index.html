@@ -173,61 +173,66 @@
             backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
         }
 
-        /* 游戏结束画面（专注力积分100%） */
+        /* 游戏结束画面（专注力积分100%）：半透明暗纱罩，透出底层原神场景作全屏背景 */
         #ending {
             position: fixed; inset: 0; z-index: 1100;
             display: none; flex-direction: column; align-items: center; justify-content: center;
-            background: radial-gradient(ellipse at 50% 60%, #1a0a2e 0%, #0d0518 60%, #000 100%);
+            background: linear-gradient(180deg, rgba(16,20,28,0.40) 0%, rgba(10,13,19,0.62) 100%);
             opacity: 0; transition: opacity 1s ease;
         }
         #ending.active { display: flex; }
         #ending.visible { opacity: 1; }
-        #ending { overflow-y: auto; padding: 4vh 0 5vh; justify-content: flex-start; }
+        #ending { overflow-y: auto; padding: 9vh 0 5vh; justify-content: flex-start; }
         #ending h1 {
             font-size: clamp(28px, 5vw, 44px); font-weight: 200; letter-spacing: 0.4em;
-            color: #ffe9a0; text-shadow: 0 0 40px rgba(255,215,0,0.4); margin-bottom: 10px;
+            color: #e9e6dd; text-shadow: 0 0 30px rgba(255,255,255,0.18); margin-bottom: 10px;
             flex-shrink: 0;
         }
-        #ending p { color: rgba(220,200,255,0.6); font-size: 14px; letter-spacing: 0.2em; margin-bottom: 14px; flex-shrink: 0; }
+        #ending p { color: rgba(215,222,228,0.55); font-size: 14px; letter-spacing: 0.2em; margin-bottom: 14px; flex-shrink: 0; }
         #ending .final-score {
-            font-size: 22px; color: #fff; font-weight: 700; letter-spacing: 2px; margin-bottom: 20px;
-            text-shadow: 0 0 20px rgba(255,215,0,0.4); flex-shrink: 0;
+            font-size: 22px; color: #eef0ea; font-weight: 700; letter-spacing: 2px; margin-bottom: 20px;
+            text-shadow: 0 0 16px rgba(255,255,255,0.15); flex-shrink: 0;
         }
 
         /* 注意力检测报告卡片 */
         #report-card {
             width: min(680px, 92vw); flex-shrink: 0;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,215,0,0.25); border-radius: 16px;
+            background: rgba(16,20,26,0.52);
+            border: 1px solid rgba(255,255,255,0.14); border-radius: 16px;
             padding: 18px 22px; margin-bottom: 22px;
-            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 8px 40px rgba(0,0,0,0.4);
         }
-        #report-title { font-size: 19px; color: #ffe9a0; letter-spacing: 5px; text-align: center; margin-bottom: 6px; font-weight: 600; }
+        #report-title { font-size: 19px; color: #dde3dc; letter-spacing: 5px; text-align: center; margin-bottom: 6px; font-weight: 600; }
         #report-meta { font-size: 12px; color: rgba(255,255,255,0.45); text-align: center; margin-bottom: 14px; font-family: monospace; }
         #report-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
         .report-item { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 4px; text-align: center; }
-        .report-item .ri-val { font-size: 19px; font-weight: 700; color: #fff; }
+        .report-item .ri-val { font-size: 19px; font-weight: 700; color: #eef0ea; }
         .report-item .ri-label { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 1px; }
-        #report-chart { width: 100%; height: auto; display: block; border-radius: 10px; background: rgba(0,0,0,0.35); margin-bottom: 14px; }
-        #report-rating { display: flex; align-items: center; gap: 14px; }
+        #report-chart { width: 100%; height: auto; display: block; border-radius: 10px; background: rgba(0,0,0,0.35); }
+        /* 评级与结论：居中显示在报告框顶部 */
+        #report-rating {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            text-align: center; margin-bottom: 14px;
+        }
         #rating-badge {
             width: 50px; height: 50px; flex-shrink: 0; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 26px; font-weight: 800; color: #ffd700;
-            background: rgba(255,215,0,0.12); border: 2px solid rgba(255,215,0,0.5);
-            text-shadow: 0 0 12px rgba(255,215,0,0.5);
+            font-size: 26px; font-weight: 800; color: #a8cdb2;
+            background: rgba(150,200,165,0.10); border: 2px solid rgba(150,200,165,0.40);
+            text-shadow: 0 0 12px rgba(150,200,165,0.35);
         }
-        #rating-text { font-size: 13px; color: rgba(255,255,255,0.78); line-height: 1.7; text-align: left; }
-        .ending-actions { display: flex; gap: 16px; flex-shrink: 0; }
+        #rating-text { font-size: 13px; color: rgba(255,255,255,0.72); line-height: 1.7; text-align: center; max-width: 540px; }
+        .ending-actions { display: flex; gap: 14px; flex-shrink: 0; }
+        /* 操作按钮：弱化为幽灵样式，避免抢占视野焦点 */
         #ending .restart-btn {
-            padding: 14px 48px; background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.35);
-            color: #ffe9a0; font-size: 18px; letter-spacing: 0.3em; border-radius: 40px;
+            padding: 7px 24px; background: transparent; border: 1px solid rgba(255,255,255,0.14);
+            color: rgba(230,234,230,0.5); font-size: 12px; letter-spacing: 0.25em; border-radius: 20px;
             cursor: pointer; transition: all 0.3s ease; font-family: inherit;
         }
         #ending .restart-btn:hover {
-            background: rgba(255,215,0,0.25); border-color: rgba(255,215,0,0.7);
-            box-shadow: 0 0 30px rgba(255,200,80,0.3); transform: scale(1.05);
+            background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.3);
+            color: rgba(240,243,240,0.85);
         }
 
         /* 开场 */
@@ -325,12 +330,12 @@
         <div id="report-card">
             <div id="report-title">注意力检测报告</div>
             <div id="report-meta"></div>
-            <div id="report-grid"></div>
-            <canvas id="report-chart" width="640" height="200"></canvas>
             <div id="report-rating">
                 <span id="rating-badge">-</span>
                 <span id="rating-text"></span>
             </div>
+            <div id="report-grid"></div>
+            <canvas id="report-chart" width="640" height="200"></canvas>
         </div>
         <div class="ending-actions">
             <button class="restart-btn" id="restart-btn">再次入梦</button>
@@ -1899,6 +1904,14 @@
             document.getElementById('final-coins').textContent = coinCount;
             document.getElementById('genshin-hud').style.display = 'none';
 
+            // 隐藏跑酷 HUD（Score/能量条/左侧积分条/操作提示/调试面板），避免与结算报告信息重复
+            const hideRunnerHUD = () => {
+                ['ui', 'coin-bar-wrap', 'controls-hint', 'algorithm-data', 'sim-panel', 'debug-genshin'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            };
+
             // 生成本次注意力检测报告（标题按检测时段自动标注：中午/上午/下午…）
             try { generateAttentionReport(); } catch (e) { console.warn('[报告] 生成失败', e); }
 
@@ -1924,11 +1937,20 @@
                 gsap.to(flash, {
                     opacity: 1, duration: 0.45, delay: 0.6, ease: 'power2.in',
                     onComplete: () => {
+                        hideRunnerHUD();   // 白屏完全遮蔽时隐藏跑酷 HUD，切换无缝
                         showEnding();
+                        // 穿门后隐藏大门、恢复前进，原神场景继续渲染作为结算画面的动态全屏背景
+                        if (gDoor) gDoor.visible = false;
+                        gsap.killTweensOf(gCenter);
+                        gCamState = 'fly';
                         gsap.to(flash, { opacity: 0, duration: 1.2, delay: 0.4, onComplete: () => { flash.remove(); } });
                     }
                 });
             } else {
+                // 未进入原神场景的兜底：结算层背景不透明（低饱和深色）
+                document.getElementById('ending').style.background =
+                    'radial-gradient(ellipse at 50% 60%, #151a22 0%, #0c0f14 60%, #000 100%)';
+                hideRunnerHUD();
                 showEnding();
             }
         }
@@ -2025,7 +2047,7 @@
             ].join('\r\n');
         }
 
-        // 注意力曲线图：红/黄/绿三个区间底色 + 金色折线
+        // 注意力曲线图：低饱和区间底色 + 灰→绿纵向渐变折线（低注意力灰、高注意力绿）
         function drawAttnChart(samples) {
             const cv = document.getElementById('report-chart');
             const ctx = cv.getContext('2d');
@@ -2035,10 +2057,10 @@
             const yOf = v => padT + plotH * (1 - v / 100);
 
             ctx.clearRect(0, 0, W, H);
-            // 区间底色
-            ctx.fillStyle = 'rgba(110,220,140,0.10)'; ctx.fillRect(padL, yOf(100), plotW, yOf(70) - yOf(100));
-            ctx.fillStyle = 'rgba(255,217,80,0.08)'; ctx.fillRect(padL, yOf(70), plotW, yOf(30) - yOf(70));
-            ctx.fillStyle = 'rgba(255,100,100,0.10)'; ctx.fillRect(padL, yOf(30), plotW, yOf(0) - yOf(30));
+            // 区间底色（低饱和）
+            ctx.fillStyle = 'rgba(150,200,165,0.09)'; ctx.fillRect(padL, yOf(100), plotW, yOf(70) - yOf(100));
+            ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(padL, yOf(70), plotW, yOf(30) - yOf(70));
+            ctx.fillStyle = 'rgba(130,130,130,0.08)'; ctx.fillRect(padL, yOf(30), plotW, yOf(0) - yOf(30));
             // 网格与刻度
             ctx.font = '10px monospace';
             ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -2057,20 +2079,23 @@
                 ctx.fillText('采样数据不足', W / 2, H / 2);
                 return;
             }
-            // 折线 + 渐变填充
+            // 折线 + 渐变填充：自下而上 灰→绿
             const xOf = i => padL + plotW * (i / (samples.length - 1));
-            const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
-            grad.addColorStop(0, 'rgba(255,215,0,0.30)');
-            grad.addColorStop(1, 'rgba(255,215,0,0.02)');
+            const grad = ctx.createLinearGradient(0, padT + plotH, 0, padT);
+            grad.addColorStop(0, 'rgba(139,144,142,0.03)');
+            grad.addColorStop(1, 'rgba(143,207,157,0.25)');
             ctx.beginPath();
             ctx.moveTo(xOf(0), yOf(samples[0]));
             for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
             ctx.lineTo(xOf(samples.length - 1), yOf(0)); ctx.lineTo(xOf(0), yOf(0)); ctx.closePath();
             ctx.fillStyle = grad; ctx.fill();
+            const lineGrad = ctx.createLinearGradient(0, padT + plotH, 0, padT);
+            lineGrad.addColorStop(0, '#8b9090');
+            lineGrad.addColorStop(1, '#8fcf9d');
             ctx.beginPath();
             ctx.moveTo(xOf(0), yOf(samples[0]));
             for (let i = 1; i < samples.length; i++) ctx.lineTo(xOf(i), yOf(samples[i]));
-            ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.6; ctx.stroke();
+            ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.6; ctx.stroke();
         }
 
         function saveAttentionReport() {
