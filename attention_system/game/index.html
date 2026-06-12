@@ -1218,6 +1218,7 @@
 
         // ==================== 障碍物 ====================
         function spawnObstacle() {
+            if (genshinActive) return; // 原神场景模式下不生成障碍物
             const lane = Math.floor(Math.random() * 3) - 1;
             let obs, ty;
             if (genshinActive) {
@@ -1243,9 +1244,9 @@
             obs.position.set(lane * 4, -5.4, playerGroup.position.z - 55 - Math.random() * 10);
             scene.add(obs); obs._scored = false; obs._jumped = false;
             obstacles.push(obs);
-            gsap.to(obs.position, { y: ty, duration: 1.2, ease: "power2.out" });
+            gsap.to(obs.position, { y: ty, duration: 1.0, ease: "power2.out" });
             obs.scale.set(0, 0, 0);
-            gsap.to(obs.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: 0.2 });
+            gsap.to(obs.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: 0.15 });
         }
 
         // ==================== 金币系统 ====================
@@ -1290,9 +1291,9 @@
                 coin._collected = false; coin._animating = false;
                 coins.push(coin);
 
-                gsap.to(coin.position, { y: yPos, duration: 0.8, ease: "power2.out", delay: i * 0.05 });
+                gsap.to(coin.position, { y: yPos, duration: 1.0, ease: "power2.out", delay: i * 0.05 });
                 coin.scale.set(0, 0, 0);
-                gsap.to(coin.scale, { x: cScale, y: cScale, z: cScale, duration: 0.6, ease: "elastic.out(1, 0.5)", delay: i * 0.05 + 0.1 });
+                gsap.to(coin.scale, { x: cScale, y: cScale, z: cScale, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: i * 0.05 + 0.1 });
             }
         }
 
@@ -2470,6 +2471,7 @@
             player.add(girlModel);
             player.material.visible = false;    // 隐藏胶囊外观（不影响子节点渲染）
             afterimages.forEach(a => { a.visible = false; }); // 胶囊形残影一并隐藏
+            if (playerGroup._glow) playerGroup._glow.visible = false; // 隐藏底部光圈/阴影
             if (girlRunAction) girlRunAction.reset().fadeIn(0.2).play();
         }
 
@@ -3614,7 +3616,7 @@
                     const d2 = new THREE.Object3D();
                     const animObj = { progress: 0 };
                     gsap.to(animObj, {
-                        progress: 1, duration: 1.2, ease: "power2.out",
+                        progress: 1, duration: 1.0, ease: "power2.out",
                         onUpdate: () => {
                             bd.forEach(data => {
                                 const zR = (data.z + halfLen) / segmentLength;
@@ -3783,7 +3785,7 @@
                 afterimages[0].material.opacity = 0.15;
             }
 
-            if (playerGroup._glow) {
+            if (playerGroup._glow && !girlActive) {
                 const gs2 = isJumping ? 1.5 : 1;
                 playerGroup._glow.scale.lerp(new THREE.Vector3(gs2, gs2, 1), 0.1);
                 playerGroup._glow.material.opacity = isJumping ? 0.35 : 0.2;
@@ -4165,7 +4167,7 @@
                     const eiTarget = THREE.MathUtils.clamp(0.25 + att / 200, 0.15, 1.2);
                     player.material.emissiveIntensity = THREE.MathUtils.lerp(player.material.emissiveIntensity || 0.3, eiTarget, 0.06);
                 }
-                if (playerGroup && playerGroup._glow) playerGroup._glow.material.color.lerp(playerCol, 0.08);
+                if (playerGroup && playerGroup._glow && !girlActive) playerGroup._glow.material.color.lerp(playerCol, 0.08);
                 if (playerGroup && playerGroup._pointLight) playerGroup._pointLight.color.lerp(playerCol, 0.08);
 
                 // apply to ground: update base material color of instanced meshes
