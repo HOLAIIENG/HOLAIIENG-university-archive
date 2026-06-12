@@ -269,6 +269,71 @@
         #pause-overlay { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
         #pause-overlay.active { display: flex; }
         #pause-overlay span { font-size: 48px; font-weight: 200; color: rgba(220,180,255,0.7); letter-spacing: 0.5em; }
+
+        /* ===== 报告历史记录 ===== */
+        /* 开场被试录入栏 */
+        #subject-bar {
+            margin-top: 30px; display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: rgba(220,180,255,0.45); letter-spacing: 1px;
+            opacity: 0; animation: introBtnIn 0.8s ease-out 2.0s forwards;
+        }
+        .attn-select, .attn-input {
+            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+            color: #e8e8f0; border-radius: 8px; padding: 5px 8px; font-size: 12px;
+            font-family: inherit; outline: none; max-width: 140px;
+        }
+        .attn-select option { background: #14181f; color: #e8e8f0; }
+        .attn-input::placeholder { color: rgba(255,255,255,0.3); }
+        .mini-btn {
+            padding: 5px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(235,238,235,0.6); border-radius: 8px; cursor: pointer; font-size: 12px;
+            font-family: inherit; transition: all 0.2s;
+        }
+        .mini-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        /* 历史对比报告浮层（风格与单次报告卡片一致：暗色玻璃、低饱和） */
+        #history-overlay {
+            position: fixed; inset: 0; z-index: 1300; display: none;
+            align-items: flex-start; justify-content: center; overflow-y: auto;
+            padding: 6vh 0; background: rgba(8,10,14,0.72);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        }
+        #history-overlay.active { display: flex; }
+        #history-card {
+            width: min(720px, 94vw); flex-shrink: 0;
+            background: rgba(16,20,26,0.85); border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 16px; padding: 20px 24px; color: #eef0ea;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #history-title { font-size: 19px; color: #dde3dc; letter-spacing: 5px; text-align: center; margin-bottom: 10px; font-weight: 600; }
+        #history-subject-row {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-bottom: 12px; font-size: 12px; color: rgba(255,255,255,0.55);
+        }
+        #history-meta { font-size: 12px; color: rgba(255,255,255,0.45); text-align: center; margin-bottom: 14px; font-family: monospace; }
+        #history-empty { display: none; text-align: center; color: rgba(255,255,255,0.4); font-size: 13px; padding: 40px 0; letter-spacing: 2px; }
+        #history-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
+        #history-chart { width: 100%; height: auto; display: block; border-radius: 10px; background: rgba(0,0,0,0.35); }
+        #history-trend { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; margin-top: 14px; }
+        #trend-badge {
+            width: 44px; height: 44px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: 800; color: #a8cdb2;
+            background: rgba(255,255,255,0.04); border: 2px solid rgba(150,200,165,0.4);
+        }
+        #trend-text { font-size: 13px; color: rgba(255,255,255,0.72); line-height: 1.7; max-width: 560px; }
+        #history-table-wrap { max-height: 180px; overflow-y: auto; margin-top: 14px; border-radius: 10px; background: rgba(255,255,255,0.03); }
+        #history-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: monospace; color: rgba(255,255,255,0.75); }
+        #history-table th, #history-table td { padding: 5px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        #history-table th { color: rgba(255,255,255,0.45); font-weight: 400; letter-spacing: 1px; position: sticky; top: 0; background: rgba(20,24,30,0.95); }
+        #history-card .ending-actions { justify-content: center; margin-top: 16px; display: flex; gap: 14px; }
+        #history-card .ghost-btn {
+            padding: 7px 24px; background: transparent; border: 1px solid rgba(255,255,255,0.14);
+            color: rgba(230,234,230,0.5); font-size: 12px; letter-spacing: 0.25em; border-radius: 20px;
+            cursor: pointer; transition: all 0.3s ease; font-family: inherit;
+        }
+        #history-card .ghost-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.3); color: rgba(240,243,240,0.85); }
     </style>
 </head>
 <body>
@@ -277,6 +342,13 @@
         <h1>DREAMCORE</h1>
         <p>用注意力驱动你的梦境</p>
         <button class="start-btn" id="start-btn">开始奔跑</button>
+        <div id="subject-bar">
+            <span>被试</span>
+            <select id="subject-select" class="attn-select"></select>
+            <input id="subject-new-name" class="attn-input" placeholder="新被试姓名" maxlength="16">
+            <button id="subject-add-btn" class="mini-btn">录入</button>
+            <button id="history-open-btn" class="mini-btn">历史报告</button>
+        </div>
     </div>
     <div id="pause-overlay"><span>已暂停</span></div>
 
@@ -340,6 +412,37 @@
         <div class="ending-actions">
             <button class="restart-btn" id="restart-btn">再次入梦</button>
             <button class="restart-btn" id="save-report-btn">保存报告</button>
+            <button class="restart-btn" id="history-btn">历史对比</button>
+        </div>
+    </div>
+
+    <!-- 历史对比报告浮层（同一被试多次测试的横向对比） -->
+    <div id="history-overlay">
+        <div id="history-card">
+            <div id="history-title">注意力横向对比报告</div>
+            <div id="history-subject-row">
+                <span>被试</span>
+                <select id="history-subject-select" class="attn-select"></select>
+            </div>
+            <div id="history-empty">该被试暂无测试记录，完成一次游戏即可自动存档</div>
+            <div id="history-content">
+                <div id="history-meta"></div>
+                <div id="history-grid"></div>
+                <canvas id="history-chart" width="640" height="220"></canvas>
+                <div id="history-trend">
+                    <span id="trend-badge">·</span>
+                    <span id="trend-text"></span>
+                </div>
+                <div id="history-table-wrap">
+                    <table id="history-table">
+                        <thead><tr><th>#</th><th>日期</th><th>时段</th><th>时长</th><th>平均注意力</th><th>稳定度</th><th>走神</th><th>评级</th></tr></thead>
+                        <tbody id="history-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="ending-actions">
+                <button class="ghost-btn" id="history-close-btn">关 闭</button>
+            </div>
         </div>
     </div>
 
@@ -377,6 +480,20 @@
         const FOCUS_TARGET_SCORE = 800;
         const GENSHIN_ENTER_PCT = 50;
         let genshinActive = false, genshinEntering = false, gameEnded = false;
+
+        // 原神场景角色：girl_mechanic.glb 替换胶囊体（参考 assets/girl_charater/girl_test_three.html：
+        // GLTFLoader 加载 + AnimationMixer 循环播放 root|Girl_run；测试页相机从 -z 看正面 → 模型面朝 -z，与前进方向一致）
+        const GIRL_GLB_PATH = 'assets/girl_charater/girl_mechanic.glb';
+        const GIRL_RUN_CLIP = 'root|Girl_run';
+        let girlModel = null, girlMixer = null, girlRunAction = null, girlActive = false, girlLoading = false;
+
+        // 原神场景道具：开源 CC0 模型（assets/genshin_props，来源见 LICENSE.md）+ 程序化兜底
+        // 障碍物：断裂石柱/浮空岩/晶簇(crystal_cluster.glb)；货币：摩拉/星辉/原石(gem_blue.glb 着色)
+        const GENSHIN_PROPS_DIR = 'assets/genshin_props/';
+        let gPropsLoading = false;
+        let gGemTemplates = null;      // { large: 星辉(紫), rare: 原石(冰蓝) }
+        let gCrystalTemplate = null;   // 晶簇障碍模板
+        let gStoneMat = null, gStoneDarkMat = null, gGoldTrimMat = null, gMoraMat = null;
 
         // 注意力检测报告数据（每秒采样一次，游戏结束时生成报告）
         let attnHistory = [], sessionStartTime = 0, hitCount = 0, reportText = '';
@@ -777,18 +894,30 @@
         // ==================== 障碍物 ====================
         function spawnObstacle() {
             const lane = Math.floor(Math.random() * 3) - 1;
-            const type = Math.floor(Math.random() * 4);
-            let obs;
-            switch (type) {
-                case 0: obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1, emissive: 0xff8fa0, emissiveIntensity: 0.15 })); break;
-                case 1: obs = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), new THREE.MeshLambertMaterial({ color: 0xc8a0ff, emissive: 0xb080ee, emissiveIntensity: 0.2 })); obs._spin = true; break;
-                case 2: obs = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.15, 48, 8), new THREE.MeshLambertMaterial({ color: 0x80f0e0, emissive: 0x60d0c0, emissiveIntensity: 0.25 })); obs._float = true; break;
-                case 3: obs = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0xeebb00, emissiveIntensity: 0.2 })); obs._spin = true; break;
+            let obs, ty;
+            if (genshinActive) {
+                // 原神风格障碍：断裂石柱 / 浮空岩（翻滚）/ 晶簇（CC0 模型，兜底程序化）
+                const type = Math.floor(Math.random() * 3);
+                if (type === 0) { obs = gMakeStonePillar(); ty = 0; }
+                else if (type === 1) { obs = gMakeFloatingRock(); obs._spin = true; ty = 1.1; }
+                else {
+                    obs = gCrystalTemplate ? gCrystalTemplate.clone(true) : gMakeCrystalProc();
+                    obs._sharedAssets = !!gCrystalTemplate;
+                    ty = 0;
+                }
+            } else {
+                const type = Math.floor(Math.random() * 4);
+                switch (type) {
+                    case 0: obs = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: 0xffb6c1, emissive: 0xff8fa0, emissiveIntensity: 0.15 })); break;
+                    case 1: obs = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), new THREE.MeshLambertMaterial({ color: 0xc8a0ff, emissive: 0xb080ee, emissiveIntensity: 0.2 })); obs._spin = true; break;
+                    case 2: obs = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.15, 48, 8), new THREE.MeshLambertMaterial({ color: 0x80f0e0, emissive: 0x60d0c0, emissiveIntensity: 0.25 })); obs._float = true; break;
+                    case 3: obs = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0xeebb00, emissiveIntensity: 0.2 })); obs._spin = true; break;
+                }
+                ty = type === 2 ? 1.2 : 0.6;
             }
             obs.position.set(lane * 4, -5.4, playerGroup.position.z - 55 - Math.random() * 10);
             scene.add(obs); obs._scored = false; obs._jumped = false;
             obstacles.push(obs);
-            const ty = type === 2 ? 1.2 : 0.6;
             gsap.to(obs.position, { y: ty, duration: 1.2, ease: "power2.out" });
             obs.scale.set(0, 0, 0);
             gsap.to(obs.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: 0.2 });
@@ -805,17 +934,32 @@
             const startZ = playerGroup.position.z - 45 - Math.random() * 15;
 
             for (let i = 0; i < count; i++) {
-                let cType, cMat, cValue, cScale, cColor;
+                let cType, cValue, cScale, cColor, coin;
                 const r = Math.random();
-                // 提高高价值金币概率：在中高注意力时更容易出现大/稀有金币
-                if (attn > 60 && r < 0.20) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.7; cColor = '#00ffcc'; }
-                else if (attn > 30 && r < 0.40) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.6; cColor = '#ff8c00'; }
-                else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.5; cColor = '#ffd700'; }
-
-                const coin = new THREE.Mesh(coinGeo, cMat);
+                if (genshinActive) {
+                    // 原神货币：摩拉（金币×1）/ 星辉（紫宝石×3）/ 原石（冰蓝宝石×8，CC0 模型）
+                    if (attn > 60 && r < 0.20) { cType = 'rare'; cValue = 8; cScale = 0.9; cColor = '#9fe8ff'; }
+                    else if (attn > 30 && r < 0.40) { cType = 'large'; cValue = 3; cScale = 0.75; cColor = '#c3aef5'; }
+                    else { cType = 'normal'; cValue = 1; cScale = 0.5; cColor = '#ffd34d'; }
+                    if (cType === 'normal') {
+                        coin = new THREE.Mesh(coinGeo, gMoraMat || coinMat);
+                        coin.rotation.x = Math.PI / 2;
+                    } else {
+                        coin = gGemTemplates ? gGemTemplates[cType].clone(true) : gMakeGemProc(cType);
+                        coin._sharedAssets = !!gGemTemplates;
+                        coin._isGem = true;  // 宝石绕 y 轴旋转，不做硬币翻转
+                    }
+                } else {
+                    // 提高高价值金币概率：在中高注意力时更容易出现大/稀有金币
+                    let cMat;
+                    if (attn > 60 && r < 0.20) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.7; cColor = '#00ffcc'; }
+                    else if (attn > 30 && r < 0.40) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.6; cColor = '#ff8c00'; }
+                    else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.5; cColor = '#ffd700'; }
+                    coin = new THREE.Mesh(coinGeo, cMat);
+                    coin.rotation.x = Math.PI / 2;
+                }
                 const yPos = 1.0 + Math.random() * 0.5;
                 coin.position.set(lane * 4, -5, startZ - i * 2.5);
-                coin.rotation.x = Math.PI / 2;
                 scene.add(coin);
                 coin._coinType = cType; coin._coinValue = cValue; coin._coinColor = cColor;
                 coin._collected = false; coin._animating = false;
@@ -833,8 +977,8 @@
             coin._collected = true;
             coin._animating = true;
 
-            // 1) 粒子爆发
-            emitParticlesAt(coin.position.clone(), 12, coin._coinColor === '#ffd700' ? 0xffd700 : coin._coinColor === '#ff8c00' ? 0xff8c00 : 0x00ffcc, 3, 0.5);
+            // 1) 粒子爆发（颜色直接取该收集物的主题色）
+            emitParticlesAt(coin.position.clone(), 12, coin._coinColor, 3, 0.5);
 
             // 音效：播放吃金币音（合成）
             try { playCoinSound(coin._coinType); } catch (e) { }
@@ -862,7 +1006,7 @@
             const trailClones = [];
             for (let t = 0; t < 4; t++) {
                 const trail = new THREE.Mesh(coinGeo, new THREE.MeshBasicMaterial({
-                    color: coin._coinColor === '#ffd700' ? 0xffd700 : coin._coinColor === '#ff8c00' ? 0xff8c00 : 0x00ffcc,
+                    color: coin._coinColor,
                     transparent: true, opacity: 0.4 - t * 0.1
                 }));
                 trail.position.copy(coin.position);
@@ -1014,7 +1158,7 @@
             coin._animating = true;
 
             // 在世界坐标位置喷发少量粒子并缩放动画后安全移除
-            emitParticlesAt(coin.position.clone(), 8, coin._coinColor === '#ffd700' ? 0xffd700 : coin._coinColor === '#ff8c00' ? 0xff8c00 : 0x00ffcc, 1.6, 0.6);
+            emitParticlesAt(coin.position.clone(), 8, coin._coinColor, 1.6, 0.6);
 
             // 3D 缩小并淡出
             gsap.to(coin.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 0.45, ease: "power2.in" });
@@ -1872,9 +2016,143 @@
             decorations.forEach(d => { d.visible = false; });
         }
 
+        // ---------- 原神场景角色（女孩模型加载与替换） ----------
+        function loadGirlCharacter() {
+            if (girlLoading || girlModel) return;
+            girlLoading = true;
+            new THREE.GLTFLoader().load(GIRL_GLB_PATH, (gltf) => {
+                const m = gltf.scene;
+                // 严格按 girl_test_three.html 的原始大小：不缩放、不偏移，模型原点即脚底
+                m.position.set(0, 0, 0);
+                girlModel = new THREE.Group();
+                girlModel.add(m);
+                // 动画：循环播放跑步（与测试页一致，找不到则回退第一个 clip）
+                if (gltf.animations && gltf.animations.length) {
+                    girlMixer = new THREE.AnimationMixer(m);
+                    const clip = gltf.animations.find(c => c.name === GIRL_RUN_CLIP) || gltf.animations[0];
+                    girlRunAction = girlMixer.clipAction(clip);
+                    girlRunAction.setLoop(THREE.LoopRepeat, Infinity);
+                }
+                if (genshinActive) swapToGirlCharacter();
+            }, undefined, (e) => {
+                girlLoading = false;
+                console.warn('[原神场景] 女孩模型加载失败，保留胶囊角色', e);
+            });
+        }
+
+        // ---------- 原神场景道具加载与程序化兜底 ----------
+        // 把 GLB 场景包进 Group 并归一化到目标尺寸；alignBottom=true 时底面对齐 y=0（站立物），否则几何中心对齐原点
+        function gNormalizeProp(objScene, targetSize, alignBottom) {
+            const wrap = new THREE.Group();
+            wrap.add(objScene);
+            const box = new THREE.Box3().setFromObject(wrap);
+            const size = box.getSize(new THREE.Vector3());
+            objScene.scale.multiplyScalar(targetSize / Math.max(size.x, size.y, size.z, 0.001));
+            const box2 = new THREE.Box3().setFromObject(wrap);
+            if (alignBottom) objScene.position.y -= box2.min.y;
+            else objScene.position.sub(box2.getCenter(new THREE.Vector3()));
+            return wrap;
+        }
+
+        // 统一替换为低饱和带自发光的材质（配合 bloom 呈宝石/晶体质感）
+        function gTintProp(group, colorHex, emissiveHex, emissiveIntensity) {
+            group.traverse(o => {
+                if (o.isMesh) {
+                    o.material = new THREE.MeshStandardMaterial({
+                        color: colorHex, emissive: emissiveHex, emissiveIntensity: emissiveIntensity,
+                        metalness: 0.25, roughness: 0.2
+                    });
+                }
+            });
+        }
+
+        function loadGenshinProps() {
+            if (gPropsLoading) return;
+            gPropsLoading = true;
+            // 共享材质：低饱和石材 + 金边（呼应场景石柱配色）、摩拉金
+            gStoneMat = new THREE.MeshLambertMaterial({ color: 0xb8b0a2 });
+            gStoneDarkMat = new THREE.MeshLambertMaterial({ color: 0x8f887c });
+            gGoldTrimMat = new THREE.MeshStandardMaterial({ color: 0xd9b36c, emissive: 0x8a6a2f, emissiveIntensity: 0.5, metalness: 0.7, roughness: 0.3 });
+            gMoraMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0xcc8a00, emissiveIntensity: 0.55, metalness: 0.85, roughness: 0.2 });
+            const loader = new THREE.GLTFLoader();
+            loader.load(GENSHIN_PROPS_DIR + 'gem_blue.glb', (gltf) => {
+                const rare = gNormalizeProp(gltf.scene, 0.8, false);
+                gTintProp(rare, 0x9fe8ff, 0x4fb8e8, 0.9);    // 原石：冰蓝
+                const large = rare.clone(true);
+                gTintProp(large, 0xc3aef5, 0x7a5fd0, 0.7);   // 星辉：淡紫
+                gGemTemplates = { rare, large };
+            }, undefined, () => console.warn('[原神道具] gem_blue.glb 加载失败，使用程序化宝石兜底'));
+            loader.load(GENSHIN_PROPS_DIR + 'crystal_cluster.glb', (gltf) => {
+                const t = gNormalizeProp(gltf.scene, 1.3, true);
+                gTintProp(t, 0xa8d8e8, 0x4890b8, 0.55);      // 晶簇：低饱和青
+                gCrystalTemplate = t;
+            }, undefined, () => console.warn('[原神道具] crystal_cluster.glb 加载失败，使用程序化晶簇兜底'));
+        }
+
+        // 程序化道具：断裂石柱（底面对齐 y=0）
+        function gMakeStonePillar() {
+            const g = new THREE.Group();
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 1.45, 8), gStoneMat);
+            shaft.position.y = 0.72; g.add(shaft);
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 0.95), gStoneDarkMat);
+            cap.position.y = 1.5; g.add(cap);
+            const band = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.07, 8), gGoldTrimMat);
+            band.position.y = 1.18; g.add(band);
+            return g;
+        }
+
+        // 程序化道具：浮空岩（中心对齐原点）
+        function gMakeFloatingRock() {
+            const g = new THREE.Group();
+            g.add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.55), gStoneMat));
+            const r2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3), gStoneDarkMat);
+            r2.position.set(0.4, -0.25, 0.15); g.add(r2);
+            return g;
+        }
+
+        // 程序化兜底：晶簇（底面对齐 y=0）
+        function gMakeCrystalProc() {
+            const g = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0xa8d8e8, emissive: 0x4890b8, emissiveIntensity: 0.55, metalness: 0.2, roughness: 0.25 });
+            [[0, 0.55, 0, 0.28, 0], [0.3, 0.4, 0.1, 0.18, 0.4], [-0.28, 0.35, -0.05, 0.16, -0.35]].forEach(d => {
+                const c = new THREE.Mesh(new THREE.OctahedronGeometry(d[3]), mat);
+                c.scale.y = 2.2; c.position.set(d[0], d[1], d[2]); c.rotation.z = d[4];
+                g.add(c);
+            });
+            return g;
+        }
+
+        // 程序化兜底：原石/星辉宝石
+        function gMakeGemProc(type) {
+            const isRare = type === 'rare';
+            const mat = new THREE.MeshStandardMaterial({
+                color: isRare ? 0x9fe8ff : 0xc3aef5, emissive: isRare ? 0x4fb8e8 : 0x7a5fd0,
+                emissiveIntensity: isRare ? 0.9 : 0.7, metalness: 0.2, roughness: 0.15
+            });
+            const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), mat);
+            m.scale.y = 1.5;
+            const g = new THREE.Group(); g.add(m);
+            return g;
+        }
+
+        function swapToGirlCharacter() {
+            if (!girlModel || girlActive) return;
+            girlActive = true;
+            // 挂为胶囊网格的子节点：继承跑动摇摆/跳跃/受击等全部 transform 动作
+            girlModel.position.set(0, -1, 0);   // 胶囊中心 y=1 → 女孩脚底落在地面 y=0
+            girlModel.rotation.y = Math.PI;     // 翻转180度，背对相机朝前进方向跑
+            girlModel.scale.set(0.7, 0.7, 0.7); // 缩小为0.5倍
+            player.add(girlModel);
+            player.material.visible = false;    // 隐藏胶囊外观（不影响子节点渲染）
+            afterimages.forEach(a => { a.visible = false; }); // 胶囊形残影一并隐藏
+            if (girlRunAction) girlRunAction.reset().fadeIn(0.2).play();
+        }
+
         function enterGenshinScene() {
             if (genshinActive || genshinEntering) return;
             genshinEntering = true;
+            loadGirlCharacter();
+            loadGenshinProps();
             console.log('[原神场景] 专注力积分达到' + GENSHIN_ENTER_PCT + '%，切入场景（跑酷玩法继续）');
 
             const flash = document.createElement('div');
@@ -1885,6 +2163,12 @@
                 onComplete: () => {
                     buildGenshinScene();
                     genshinActive = true;
+                    swapToGirlCharacter();   // 模型已就绪则立即替换；否则加载完成后自动替换
+                    // 白屏峰值清除梦核风格的旧障碍/金币，新生成的全部换用原神风格道具
+                    obstacles.forEach(o => { gsap.killTweensOf(o.position); gsap.killTweensOf(o.scale); scene.remove(o); disposeMesh(o); });
+                    obstacles.length = 0;
+                    coins.forEach(c => { gsap.killTweensOf(c.position); gsap.killTweensOf(c.scale); scene.remove(c); disposeMesh(c); });
+                    coins.length = 0;
                     gHideRunnerEnvironment();
                     gApplyGenshinLighting();
                     // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板并叠加场景 HUD
@@ -2021,11 +2305,30 @@
             document.getElementById('rating-badge').textContent = grade;
             document.getElementById('rating-text').textContent = advice;
 
+            // 保存历史记录到 localStorage（按当前被试归档），并把被试名并入报告抬头
+            let histSubjName = '';
+            try {
+                const subj = histSaveRecord({
+                    id: 'r' + Date.now(), time: Date.now(), period: period,
+                    durationMs: durMs, avg: +avg.toFixed(1), max: Math.round(max), min: Math.round(min),
+                    std: +std.toFixed(1), stability: stability,
+                    highPct: pct(highT), midPct: pct(midT), lowPct: pct(lowT),
+                    distract: distract, hits: hitCount, score: score, coins: coinCount, grade: grade,
+                    samples: samples.map(v => Math.round(v))
+                });
+                histSubjName = subj ? subj.name : '';
+                if (histSubjName) {
+                    document.getElementById('report-meta').textContent =
+                        '被试 ' + histSubjName + ' · ' + dateStr + ' · 检测时长 ' + durStr + ' · 采样 ' + samples.length + ' 次';
+                }
+            } catch (e) { console.warn('[历史记录] 保存失败', e); }
+
             // 文本版报告（供保存）
             reportText = [
                 '================================',
                 '      ' + period + '注意力检测报告',
                 '================================',
+                '被试: ' + (histSubjName || '未命名被试'),
                 '检测时间: ' + dateStr,
                 '检测时长: ' + durStr + '（采样 ' + samples.length + ' 次）',
                 '',
@@ -2115,6 +2418,224 @@
 
         document.getElementById('restart-btn').addEventListener('click', () => { location.reload(); });
         document.getElementById('save-report-btn').addEventListener('click', saveAttentionReport);
+
+        // ==================== 报告历史记录（localStorage） ====================
+        const HIST_KEY = 'dreamcore_attn_history_v1';
+
+        function histLoad() {
+            try {
+                const db = JSON.parse(localStorage.getItem(HIST_KEY));
+                if (db && Array.isArray(db.subjects) && Array.isArray(db.records)) return db;
+            } catch (e) { }
+            return { subjects: [], currentSubjectId: null, records: [] };
+        }
+        function histSave(db) {
+            try { localStorage.setItem(HIST_KEY, JSON.stringify(db)); }
+            catch (e) { console.warn('[历史记录] 写入 localStorage 失败', e); }
+        }
+        function fmtHistDate(ts) {
+            const d = new Date(ts), p = n => String(n).padStart(2, '0');
+            return (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + '-' : '') +
+                p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+        }
+
+        // ---- 被试录入与选择（开场界面） ----
+        function refreshSubjectSelect() {
+            const db = histLoad();
+            const sel = document.getElementById('subject-select');
+            sel.innerHTML = '';
+            const none = document.createElement('option');
+            none.value = ''; none.textContent = '未选择被试';
+            sel.appendChild(none);
+            db.subjects.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.id; o.textContent = s.name;
+                if (s.id === db.currentSubjectId) o.selected = true;
+                sel.appendChild(o);
+            });
+        }
+        document.getElementById('subject-select').addEventListener('change', function () {
+            const db = histLoad();
+            db.currentSubjectId = this.value || null;
+            histSave(db);
+        });
+        document.getElementById('subject-add-btn').addEventListener('click', () => {
+            const input = document.getElementById('subject-new-name');
+            const name = input.value.trim();
+            if (!name) { input.focus(); return; }
+            const db = histLoad();
+            let subj = db.subjects.find(s => s.name === name);
+            if (!subj) { subj = { id: 's' + Date.now(), name: name, createdAt: Date.now() }; db.subjects.push(subj); }
+            db.currentSubjectId = subj.id;
+            histSave(db);
+            input.value = '';
+            refreshSubjectSelect();
+        });
+        refreshSubjectSelect();
+
+        // ---- 保存一条测试记录（generateAttentionReport 调用），返回归档到的被试 ----
+        function histSaveRecord(rec) {
+            const db = histLoad();
+            let subj = db.subjects.find(s => s.id === db.currentSubjectId);
+            if (!subj) { // 未录入被试时自动归档到"未命名被试"
+                subj = db.subjects.find(s => s.name === '未命名被试');
+                if (!subj) { subj = { id: 's' + Date.now(), name: '未命名被试', createdAt: Date.now() }; db.subjects.push(subj); }
+                db.currentSubjectId = subj.id;
+            }
+            rec.subjectId = subj.id;
+            db.records.push(rec);
+            histSave(db);
+            return subj;
+        }
+
+        // ---- 历史对比报告浮层 ----
+        function openHistory(preferId) {
+            const db = histLoad();
+            const sel = document.getElementById('history-subject-select');
+            sel.innerHTML = '';
+            if (!db.subjects.length) {
+                const o = document.createElement('option');
+                o.value = ''; o.textContent = '暂无被试';
+                sel.appendChild(o);
+            }
+            db.subjects.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.id; o.textContent = s.name;
+                sel.appendChild(o);
+            });
+            const target = preferId || db.currentSubjectId || (db.subjects[0] && db.subjects[0].id) || '';
+            sel.value = target;
+            renderHistory(target);
+            document.getElementById('history-overlay').classList.add('active');
+        }
+        document.getElementById('history-subject-select').addEventListener('change', function () { renderHistory(this.value); });
+        document.getElementById('history-close-btn').addEventListener('click', () => {
+            document.getElementById('history-overlay').classList.remove('active');
+        });
+        document.getElementById('history-btn').addEventListener('click', () => openHistory(null));
+        document.getElementById('history-open-btn').addEventListener('click', () => openHistory(null));
+
+        function renderHistory(subjectId) {
+            const db = histLoad();
+            const recs = db.records.filter(r => r.subjectId === subjectId).sort((a, b) => a.time - b.time);
+            const empty = document.getElementById('history-empty');
+            const content = document.getElementById('history-content');
+            if (!recs.length) { empty.style.display = 'block'; content.style.display = 'none'; return; }
+            empty.style.display = 'none'; content.style.display = 'block';
+
+            const subj = db.subjects.find(s => s.id === subjectId);
+            const n = recs.length;
+            const first = recs[0], last = recs[n - 1];
+            const avgDelta = +(last.avg - first.avg).toFixed(1);
+            const stabDelta = last.stability - first.stability;
+            const totalMin = Math.round(recs.reduce((a, r) => a + (r.durationMs || 0), 0) / 60000);
+            const bestGrade = ['S', 'A', 'B', 'C'].find(g => recs.some(r => r.grade === g)) || '-';
+            const avgDistract = (recs.reduce((a, r) => a + (r.distract || 0), 0) / n).toFixed(1);
+
+            document.getElementById('history-meta').textContent =
+                (subj ? subj.name : '') + ' · 共 ' + n + ' 次测试 · ' + fmtHistDate(first.time) + ' ~ ' + fmtHistDate(last.time);
+
+            const sign = v => (v > 0 ? '+' : '') + v;
+            const items = [
+                [n + ' 次', '测试次数'],
+                [first.avg + '→' + last.avg + '%', '平均注意力 (' + sign(avgDelta) + ')'],
+                [first.stability + '→' + last.stability, '稳定度 (' + sign(stabDelta) + ')'],
+                [bestGrade, '最佳评级'],
+                [avgDistract + ' 次', '场均走神'],
+                [totalMin + ' 分钟', '累计训练时长'],
+                [Math.max.apply(null, recs.map(r => r.max)) + '%', '历史最高注意力'],
+                [String(Math.max.apply(null, recs.map(r => r.score))), '历史最高得分']
+            ];
+            document.getElementById('history-grid').innerHTML = items.map(i =>
+                '<div class="report-item"><div class="ri-val">' + i[0] + '</div><div class="ri-label">' + i[1] + '</div></div>'
+            ).join('');
+
+            drawHistoryChart(recs);
+
+            // 趋势结论：对平均注意力做线性回归，斜率 = 平均每次测试的变化量
+            const ys = recs.map(r => r.avg);
+            const xm = (n - 1) / 2, ym = ys.reduce((a, b) => a + b, 0) / n;
+            let num = 0, den = 0;
+            ys.forEach((y, i) => { num += (i - xm) * (y - ym); den += (i - xm) * (i - xm); });
+            const slope = den ? num / den : 0;
+            const badge = document.getElementById('trend-badge');
+            const text = document.getElementById('trend-text');
+            let arrow, color, msg;
+            if (n < 2) { arrow = '·'; color = 'rgba(255,255,255,0.6)'; msg = '已记录 1 次测试，再完成一次即可生成趋势对比。'; }
+            else if (slope >= 2) { arrow = '↑'; color = '#a8cdb2'; msg = '注意力水平呈明显上升趋势（平均每次 +' + slope.toFixed(1) + '%），训练效果显著，请保持当前节奏。'; }
+            else if (slope >= 0.5) { arrow = '↗'; color = '#a8cdb2'; msg = '注意力水平略有提升（平均每次 +' + slope.toFixed(1) + '%），训练正在起效，建议保持规律测试。'; }
+            else if (slope > -0.5) { arrow = '→'; color = 'rgba(255,255,255,0.65)'; msg = '注意力水平基本持平，可尝试调整训练时段或增加测试频率后再观察。'; }
+            else { arrow = '↘'; color = '#cfa8a8'; msg = '注意力水平有所下降（平均每次 ' + slope.toFixed(1) + '%），建议检查作息与测试环境，适当休息后再试。'; }
+            badge.textContent = arrow;
+            badge.style.color = color; badge.style.borderColor = color;
+            text.textContent = msg;
+
+            // 记录明细表
+            document.getElementById('history-table-body').innerHTML = recs.map((r, i) =>
+                '<tr><td>' + (i + 1) + '</td><td>' + fmtHistDate(r.time) + '</td><td>' + (r.period || '-') + '</td><td>' +
+                (Math.round((r.durationMs || 0) / 6000) / 10) + '分</td><td>' + r.avg + '%</td><td>' + r.stability +
+                '</td><td>' + r.distract + '</td><td>' + r.grade + '</td></tr>'
+            ).join('');
+        }
+
+        // 横向对比折线图：风格与单次报告曲线一致（平均注意力 = 灰→绿渐变实线，稳定度 = 灰虚线）
+        function drawHistoryChart(recs) {
+            const cv = document.getElementById('history-chart');
+            const ctx = cv.getContext('2d');
+            const W = cv.width, H = cv.height;
+            const padL = 34, padR = 14, padT = 26, padB = 32;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const yOf = v => padT + plotH * (1 - v / 100);
+            const n = recs.length;
+            const xOf = i => n === 1 ? padL + plotW / 2 : padL + plotW * (i / (n - 1));
+
+            ctx.clearRect(0, 0, W, H);
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+            [0, 30, 70, 100].forEach(v => {
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                ctx.beginPath(); ctx.moveTo(padL, yOf(v)); ctx.lineTo(W - padR, yOf(v)); ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.45)';
+                ctx.fillText(v, padL - 5, yOf(v));
+            });
+            // x 轴：测试次序
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            const step = Math.ceil(n / 10);
+            for (let i = 0; i < n; i += step) ctx.fillText(String(i + 1), xOf(i), padT + plotH + 5);
+            ctx.fillText('测试次序 →', W / 2, H - 13);
+
+            // 稳定度（灰虚线）
+            ctx.strokeStyle = 'rgba(160,165,168,0.55)';
+            ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            recs.forEach((r, i) => { i ? ctx.lineTo(xOf(i), yOf(r.stability)) : ctx.moveTo(xOf(i), yOf(r.stability)); });
+            ctx.stroke(); ctx.setLineDash([]);
+
+            // 平均注意力（灰→绿纵向渐变实线）
+            const lineGrad = ctx.createLinearGradient(0, padT + plotH, 0, padT);
+            lineGrad.addColorStop(0, '#8b9090');
+            lineGrad.addColorStop(1, '#8fcf9d');
+            ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            recs.forEach((r, i) => { i ? ctx.lineTo(xOf(i), yOf(r.avg)) : ctx.moveTo(xOf(i), yOf(r.avg)); });
+            ctx.stroke();
+
+            // 数据点
+            recs.forEach((r, i) => {
+                ctx.fillStyle = '#8fcf9d';
+                ctx.beginPath(); ctx.arc(xOf(i), yOf(r.avg), 3, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(160,165,168,0.8)';
+                ctx.beginPath(); ctx.arc(xOf(i), yOf(r.stability), 2.4, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // 图例
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#8fcf9d'; ctx.fillRect(padL + 4, 10, 14, 3);
+            ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText('平均注意力', padL + 22, 12);
+            ctx.fillStyle = 'rgba(160,165,168,0.7)'; ctx.fillRect(padL + 102, 10, 14, 3);
+            ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText('稳定度', padL + 120, 12);
+        }
 
         // ==================== 觉醒系统 ====================
         function checkAwakening() {
@@ -2309,6 +2830,7 @@
         }
 
         function disposeMesh(mesh) {
+            if (mesh && mesh._sharedAssets) return; // 模板克隆体共享几何/材质，不能释放
             try {
                 if (mesh.isGroup || (mesh.children && mesh.children.length > 0))
                     mesh.children.forEach(c => { if (c.geometry) c.geometry.dispose(); if (c.material) { if (Array.isArray(c.material)) c.material.forEach(m => m.dispose()); else c.material.dispose(); } });
@@ -2487,10 +3009,11 @@
                 if (obs._float) obs.position.y += Math.sin(now * 0.002 + obs.position.z) * 0.003;
             });
 
-            // 金币旋转浮动
+            // 金币旋转浮动（宝石绕 y 轴自转，硬币绕 z 轴翻转）
             coins.forEach(c => {
                 if (c._collected) return;
-                c.rotation.z += dt * 3;
+                if (c._isGem) c.rotation.y += dt * 2;
+                else c.rotation.z += dt * 3;
                 c.position.y += Math.sin(now * 0.003 + c.position.z * 0.5) * 0.004;
             });
 
@@ -2547,6 +3070,12 @@
             document.getElementById('cursor-y').innerText = filtered_focus_y.toFixed(0);
 
             if (simMode !== 'off') updateSimAttn(now);
+
+            // 女孩角色跑步动画：播放速度随当前移动速度缩放（参考 girl_test_three 的 mixer.update）
+            if (girlActive && girlMixer) {
+                girlMixer.timeScale = smoothSpeed / 0.18;
+                girlMixer.update(dt);
+            }
 
             if (genshinActive && gReady) {
                 // 原神场景作背景，跑酷玩法层（角色/障碍/金币）叠加其上
@@ -2609,13 +3138,16 @@
             tl.to(player.position, { y: 3.5, duration: 0.1 }, 0.3);
             tl.to(player.position, { y: 1, duration: 0.25, ease: "power2.in" }, 0.4);
             tl.to(player.rotation, { x: 0, duration: 0.15, ease: "power2.out" }, 0.6);
-            tl.to(player.scale, { x: 1.3, y: 0.7, z: 1.3, duration: 0.08, ease: "power2.out" }, 0.6);
-            tl.to(player.scale, { x: 1, y: 1, z: 1, duration: 0.2, ease: "elastic.out(1, 0.4)" }, 0.68);
+            if (!girlActive) { // 女角色有自身骨骼动画，不做落地压扁回弹形变
+                tl.to(player.scale, { x: 1.3, y: 0.7, z: 1.3, duration: 0.08, ease: "power2.out" }, 0.6);
+                tl.to(player.scale, { x: 1, y: 1, z: 1, duration: 0.2, ease: "elastic.out(1, 0.4)" }, 0.68);
+            }
             tl.call(() => { emitLandingParticles(); }, null, 0.6);
         }
 
         // ==================== 键盘 ====================
         document.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return; // 不拦截输入框/下拉框
             if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
             if (!gameStarted || gameEnded) return;
             if (isPaused && e.key !== 'p' && e.key !== 'P') return;
