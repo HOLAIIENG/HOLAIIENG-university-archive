@@ -1,12 +1,11 @@
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, QByteArray
-from PyQt5.QtNetwork import QTcpSocket, QAbstractSocket
-from PyQt5.QtCore import QDataStream, QObject, QIODevice
+from PySide6.QtCore import Signal, Slot, QByteArray, QDataStream, QObject, QIODevice
+from PySide6.QtNetwork import QTcpSocket, QAbstractSocket
 
 
 class HNNKTcpSocketClient(QObject):
-    server_connected = pyqtSignal()
-    server_disconnected = pyqtSignal()
-    recv_from_server = pyqtSignal(QByteArray)
+    server_connected = Signal()
+    server_disconnected = Signal()
+    recv_from_server = Signal(QByteArray)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,29 +25,29 @@ class HNNKTcpSocketClient(QObject):
         self.socket.disconnectFromHost()
 
     def send_to_server(self, data):
-        if self.socket.state() != QAbstractSocket.ConnectedState:
+        if self.socket.state() != QAbstractSocket.SocketState.ConnectedState:
             return
 
         payload = QByteArray(data)
 
         packet = QByteArray()
-        stream = QDataStream(packet, QIODevice.WriteOnly)
-        stream.setByteOrder(QDataStream.BigEndian)
+        stream = QDataStream(packet, QIODevice.OpenModeFlag.WriteOnly)
+        stream.setByteOrder(QDataStream.ByteOrder.BigEndian)
 
         stream.writeUInt32(payload.size())
         packet.append(payload)
 
         self.socket.write(packet)
 
-    @pyqtSlot()
+    @Slot()
     def on_server_connected(self):
         self.server_connected.emit()
 
-    @pyqtSlot()
+    @Slot()
     def on_server_disconnected(self):
         self.server_disconnected.emit()
 
-    @pyqtSlot()
+    @Slot()
     def on_recv_from_server(self):
         self.recv_buffer.append(self.socket.readAll())
 
@@ -57,7 +56,7 @@ class HNNKTcpSocketClient(QObject):
                 return
 
             stream = QDataStream(self.recv_buffer)
-            stream.setByteOrder(QDataStream.BigEndian)
+            stream.setByteOrder(QDataStream.ByteOrder.BigEndian)
             payload_len = stream.readUInt32()
 
             total_len = 4 + payload_len

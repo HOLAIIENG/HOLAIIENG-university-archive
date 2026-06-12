@@ -1,63 +1,64 @@
 import json
 import re
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QFrame, QLabel, QLineEdit, QPushButton, QMessageBox, \
+    QHBoxLayout, QVBoxLayout, QSizePolicy
+from PySide6.QtCore import Qt
 
 from attention_system.app_demo.app.titile_bar import CustomTitleBar
 from attention_system.app_demo.ipc_socket.tcp_socket_client import HNNKTcpSocketClient
 from attention_system.app_demo.ipc_socket.websocket_bridge import WebSocketBridge
 
 
-#自定义标题栏控件
+# 自定义标题栏控件
 
-#主窗口类
+# 主窗口类
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        #科创client_socket实例初始化
+        # 科创client_socket实例初始化
         self.client_socket = HNNKTcpSocketClient()
-        #WebSocket桥接器
+        # WebSocket桥接器
         self.websocket_bridge = WebSocketBridge()
-        #算法数据存储
+        # 算法数据存储
         self.algorithm_data = {
             'gyroscope': None,
             'attention': None
         }
-        
-        #绑定连接信号
+
+        # 绑定连接信号
         self.client_socket.server_connected.connect(self.on_server_connected)
-        #绑定断开连接信号
+        # 绑定断开连接信号
         self.client_socket.server_disconnected.connect(self.on_server_disconnected)
-        #绑定接收科创平台消息的信号
+        # 绑定接收科创平台消息的信号
         self.client_socket.recv_from_server.connect(self.on_server_data)
-        
-        #启动WebSocket服务器
+
+        # 启动WebSocket服务器
         self.websocket_bridge.start_server()
 
-        #相关属性
-        self.connect_status = False #服务器是否连接
-        self.layout_type = 0 #平台是默认布局模式还是分屏布局模式  0:默认布局  1:分屏布局
+        # 相关属性
+        self.connect_status = False  # 服务器是否连接
+        self.layout_type = 0  # 平台是默认布局模式还是分屏布局模式  0:默认布局  1:分屏布局
 
-        #初始化ui
+        # 初始化ui
         self.init_ui()
 
-        #居中显示
+        # 居中显示
         self.show_window_center()
 
-    #在屏幕中央居中显示
+    # 在屏幕中央居中显示
     def show_window_center(self):
         self.resize(1220, 490)
-        screen = QDesktopWidget().screenGeometry()
-        x = (screen.size().width() - self.geometry().width()) // 2
-        y = (screen.size().height() - self.geometry().height()) // 2
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.geometry().width()) // 2
+        y = (screen.height() - self.geometry().height()) // 2
         self.setGeometry(x, y, self.geometry().width(), self.geometry().height())
         self.show()
 
     # ui初始化
     def init_ui(self):
         # 设置无边框窗体，并居中显示
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setStyleSheet("background-color: white;")
 
         # 主内容布局：包含标题栏 + 内容区
@@ -77,15 +78,15 @@ class MainWindow(QMainWindow):
         '''
         客户区域自定义
         '''
-        #连接区域
+        # 连接区域
         connect_widget = QWidget()
-        connect_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        connect_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         connect_hbox = QHBoxLayout()
         connect_hbox.setContentsMargins(40, 0, 40, 0)
         connect_hbox.setSpacing(20)
 
-        #ip地址区域
+        # ip地址区域
         server_ip_widget = QWidget()
         server_ip_vbox = QVBoxLayout()
         server_ip_vbox.setSpacing(14)
@@ -93,7 +94,7 @@ class MainWindow(QMainWindow):
 
         server_ip_label = QLabel('服务器地址')
         server_ip_label.setFixedHeight(16)
-        server_ip_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        server_ip_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         server_ip_label.setStyleSheet("""
                QLabel {
                    font-family: "SourceHanSansCN";
@@ -116,13 +117,13 @@ class MainWindow(QMainWindow):
                 color: #3E3F42;
             }
         """)
-        self.server_ip_lineedit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.server_ip_lineedit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         server_ip_vbox.addWidget(server_ip_label)
         server_ip_vbox.addWidget(self.server_ip_lineedit)
         server_ip_widget.setLayout(server_ip_vbox)
 
-        #port区域
+        # port区域
         server_port_widget = QWidget()
         server_port_vbox = QVBoxLayout()
         server_port_vbox.setSpacing(14)
@@ -130,7 +131,7 @@ class MainWindow(QMainWindow):
 
         server_port_label = QLabel('端口')
         server_port_label.setFixedHeight(16)
-        server_port_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        server_port_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         server_port_label.setStyleSheet("""
                              QLabel {
                                  font-family: "SourceHanSansCN";
@@ -154,13 +155,13 @@ class MainWindow(QMainWindow):
                    }
                """)
 
-        self.server_port_lineedit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.server_port_lineedit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         server_port_vbox.addWidget(server_port_label)
         server_port_vbox.addWidget(self.server_port_lineedit)
         server_port_widget.setLayout(server_port_vbox)
 
-        #连接按钮区域
+        # 连接按钮区域
         server_btn_widget = QWidget()
         server_btn_vbox = QVBoxLayout()
         server_btn_vbox.setContentsMargins(0, 30, 0, 0)
@@ -188,7 +189,7 @@ class MainWindow(QMainWindow):
             border: 2px solid rgba(192,200,211,0.2);
         }
         """)
-        self.connect_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.connect_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.connect_button.clicked.connect(self.connect_server)
 
         self.disconnect_button = QPushButton("断开")
@@ -212,12 +213,12 @@ class MainWindow(QMainWindow):
             border: 2px solid rgba(192,200,211,0.2);
         }
         """)
-        self.disconnect_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.disconnect_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.disconnect_button.clicked.connect(self.disconnect_server)
 
         self.connect_status_label = QLabel('状态: 未连接')
         self.connect_status_label.setFixedHeight(16)
-        self.connect_status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.connect_status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.connect_status_label.setStyleSheet("""
             QLabel {
                 font-family: "SourceHanSansCN";
@@ -227,7 +228,7 @@ class MainWindow(QMainWindow):
                 line-height: 24px;
             }
         """)
-        self.connect_status_label.setAlignment(Qt.AlignCenter)
+        self.connect_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         server_btn_hbox.addWidget(self.connect_button, 1)
         server_btn_hbox.addWidget(self.disconnect_button, 1)
@@ -241,9 +242,9 @@ class MainWindow(QMainWindow):
         connect_hbox.addWidget(server_btn_widget, 1)
         connect_widget.setLayout(connect_hbox)
 
-        #自定义内容区域
+        # 自定义内容区域
         content_widget = QFrame()
-        content_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        content_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         content_widget.setObjectName("contentFrame")
         content_widget.setStyleSheet("""
             #contentFrame {
@@ -263,7 +264,7 @@ class MainWindow(QMainWindow):
         client_box.setContentsMargins(0, 0, 0, 0)
         client_box.setSpacing(24)
 
-        #分配比例1:4的高度比例，保证默认布局和分屏布局尺寸自适应缩放
+        # 分配比例1:4的高度比例，保证默认布局和分屏布局尺寸自适应缩放
         client_box.addWidget(connect_widget, 1)
         client_box.addWidget(content_widget, 4)
 
@@ -271,7 +272,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central_widget)
 
-    #连接服务器
+    # 连接服务器
     def connect_server(self):
         host = self.server_ip_lineedit.text().strip()
         port_text = self.server_port_lineedit.text().strip()
@@ -300,11 +301,11 @@ class MainWindow(QMainWindow):
 
         self.client_socket.connect_server(host, port)
 
-    #断开服务器
+    # 断开服务器
     def disconnect_server(self):
         self.client_socket.close_server()
 
-    #当服务器连接上的时候
+    # 当服务器连接上的时候
     def on_server_connected(self):
         print('on_server_connected')
         self.connect_status = True
@@ -312,7 +313,7 @@ class MainWindow(QMainWindow):
         self.disconnect_button.setEnabled(True)
         self.connect_status_label.setText("状态: 已连接")
 
-    #当服务器断开的时候
+    # 当服务器断开的时候
     def on_server_disconnected(self):
         print('on_server_disconnected')
         self.connect_status = False
@@ -335,37 +336,60 @@ class MainWindow(QMainWindow):
             # 如果收到平台的算法在线模式的协议输出,会得到平台算法输出的指令
             result = ipc_json_data['result_args']['data']
             algorithm_name = ipc_json_data.get('algorithm_name', '')
-            
+
             # 处理不同算法的数据
             if algorithm_name == 'gyroscope':
                 self.algorithm_data['gyroscope'] = result
             elif algorithm_name == 'attention':
                 self.algorithm_data['attention'] = result
-            
+
             # 整合数据并发送到WebSocket
             combined_data = {
-                'gyroscope_x': self.algorithm_data['gyroscope']['gyroscope_x'] if self.algorithm_data['gyroscope'] else 0,
-                'gyroscope_y': self.algorithm_data['gyroscope']['gyroscope_y'] if self.algorithm_data['gyroscope'] else 0,
-                'gyroscope_z': self.algorithm_data['gyroscope']['gyroscope_z'] if self.algorithm_data['gyroscope'] and 'gyroscope_z' in self.algorithm_data['gyroscope'] else 0,
+                'gyroscope_x': self.algorithm_data['gyroscope']['gyroscope_x'] if self.algorithm_data[
+                    'gyroscope'] else 0,
+                'gyroscope_y': self.algorithm_data['gyroscope']['gyroscope_y'] if self.algorithm_data[
+                    'gyroscope'] else 0,
+                'gyroscope_z': self.algorithm_data['gyroscope']['gyroscope_z'] if self.algorithm_data[
+                                                                                      'gyroscope'] and 'gyroscope_z' in
+                                                                                  self.algorithm_data[
+                                                                                      'gyroscope'] else 0,
                 'attention': self.algorithm_data['attention'] if self.algorithm_data['attention'] else 0,
-                'focus_area_width': self.algorithm_data['gyroscope']['focus_area_width'] if self.algorithm_data['gyroscope'] and 'focus_area_width' in self.algorithm_data['gyroscope'] else 0,
-                'focus_area_height': self.algorithm_data['gyroscope']['focus_area_height'] if self.algorithm_data['gyroscope'] and 'focus_area_height' in self.algorithm_data['gyroscope'] else 0,
-                'focus_area_x': self.algorithm_data['gyroscope']['focus_area_x'] if self.algorithm_data['gyroscope'] and 'focus_area_x' in self.algorithm_data['gyroscope'] else 0,
-                'focus_area_y': self.algorithm_data['gyroscope']['focus_area_y'] if self.algorithm_data['gyroscope'] and 'focus_area_y' in self.algorithm_data['gyroscope'] else 0,
-                'focus_x': self.algorithm_data['gyroscope']['focus_x'] if self.algorithm_data['gyroscope'] and 'focus_x' in self.algorithm_data['gyroscope'] else 0,
-                'focus_y': self.algorithm_data['gyroscope']['focus_y'] if self.algorithm_data['gyroscope'] and 'focus_y' in self.algorithm_data['gyroscope'] else 0
+                'focus_area_width': self.algorithm_data['gyroscope']['focus_area_width'] if self.algorithm_data[
+                                                                                                'gyroscope'] and 'focus_area_width' in
+                                                                                            self.algorithm_data[
+                                                                                                'gyroscope'] else 0,
+                'focus_area_height': self.algorithm_data['gyroscope']['focus_area_height'] if self.algorithm_data[
+                                                                                                  'gyroscope'] and 'focus_area_height' in
+                                                                                              self.algorithm_data[
+                                                                                                  'gyroscope'] else 0,
+                'focus_area_x': self.algorithm_data['gyroscope']['focus_area_x'] if self.algorithm_data[
+                                                                                        'gyroscope'] and 'focus_area_x' in
+                                                                                    self.algorithm_data[
+                                                                                        'gyroscope'] else 0,
+                'focus_area_y': self.algorithm_data['gyroscope']['focus_area_y'] if self.algorithm_data[
+                                                                                        'gyroscope'] and 'focus_area_y' in
+                                                                                    self.algorithm_data[
+                                                                                        'gyroscope'] else 0,
+                'focus_x': self.algorithm_data['gyroscope']['focus_x'] if self.algorithm_data[
+                                                                              'gyroscope'] and 'focus_x' in
+                                                                          self.algorithm_data['gyroscope'] else 0,
+                'focus_y': self.algorithm_data['gyroscope']['focus_y'] if self.algorithm_data[
+                                                                              'gyroscope'] and 'focus_y' in
+                                                                          self.algorithm_data['gyroscope'] else 0
             }
-            
+
             # 打印所有值
-            print(f"GyroX: {combined_data['gyroscope_x']:.2f}, GyroY: {combined_data['gyroscope_y']:.2f}, GyroZ: {combined_data['gyroscope_z']:.2f}")
+            print(
+                f"GyroX: {combined_data['gyroscope_x']:.2f}, GyroY: {combined_data['gyroscope_y']:.2f}, GyroZ: {combined_data['gyroscope_z']:.2f}")
             print(f"Attn: {combined_data['attention']}")
-            print(f"FocusArea: W={combined_data['focus_area_width']}, H={combined_data['focus_area_height']}, X={combined_data['focus_area_x']}, Y={combined_data['focus_area_y']}")
+            print(
+                f"FocusArea: W={combined_data['focus_area_width']}, H={combined_data['focus_area_height']}, X={combined_data['focus_area_x']}, Y={combined_data['focus_area_y']}")
             print(f"FocusPoint: X={combined_data['focus_x']}, Y={combined_data['focus_y']}")
-            
+
             # 发送整合后的数据到WebSocket客户端
             self.websocket_bridge.send_algorithm_data(combined_data)
         elif msg == 'ipc_user_info':
-            #layout_type：0/1 默认布局/分屏布局
+            # layout_type：0/1 默认布局/分屏布局
             self.layout_type = ipc_json_data['layout_type']
             '''
             1.如果是分屏布局，为了让案例和平台融合在一起的效果观感好看
@@ -378,7 +402,7 @@ class MainWindow(QMainWindow):
                 self.title_bar.setVisible(False)
                 self.ipc_user_info()
 
-    #退出分屏模式
+    # 退出分屏模式
     def exit_server_window(self):
         self.title_bar.setVisible(True)
         self.show_window_center()
