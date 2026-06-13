@@ -873,10 +873,45 @@
         const BLOCK_SIZE = 4, BLOCK_GAP = 0.3;
         const BLOCK_HEIGHT_MIN = 0.2, BLOCK_HEIGHT_MAX = 1.0, GROUND_WIDTH = 60;
         const LANE_X_POSITIONS = [-4, 0, 4];
-        const BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc];
+        let BLOCK_COLORS = [0xffd1dc, 0xf0b8c8, 0xe8a0b8, 0xffc4d6, 0xf5d0e0, 0xeecccc]; // 可按场景整体替换
+        let groundBaseColor = 0xffd1dc; // 地面基础材质色（场景切换时改变）
         const segmentLength = 40, aheadRange = 60, behindRange = 40;
         const groundSegments = [];
         const laneSegments = { '-4': [], '0': [], '4': [] };
+
+        // ==================== 多场景系统：积分达到30%时出现三扇门（海上城市 / 草地 / 星系） ====================
+        const SCENE_GATE_PCT = 30;                 // 积分百分比达到此值 → 弹出三扇门
+        let sceneGateTriggered = false;            // 闸口是否已触发（仅一次）
+        let sceneGateActive = false;               // 选门进行中（暂停障碍生成）
+        let sceneChosen = false;                   // 是否已选定场景
+        let currentScene = null;                   // 'sea' | 'grass' | 'galaxy'，null=默认梦核
+        const sceneDoors = [];                     // 当前三扇门
+        let sceneDoorZ = 0;                        // 三扇门所在 z
+        let _scenePropCursorZ = 0;                 // 侧边场景道具滚动生成游标
+        let _cityTexCache = null;                  // 共享城市窗户贴图
+        const sceneSingletons = { water: null, galaxy: null, wave: null, stars: null, grass: null };
+        const SCENE_META = {
+            sea:    { name: '海上城市', color: 0x4fc3f7 },
+            grass:  { name: '草地',     color: 0x7cd66a },
+            galaxy: { name: '星系',     color: 0xb388ff }
+        };
+        const SCENE_LANE_ORDER = ['sea', 'grass', 'galaxy']; // 左(-4) / 中(0) / 右(4)
+        const SCENE_BLOCK_COLORS = {
+            sea:    [0x4fc3f7, 0x29b6f6, 0x81d4fa, 0x4dd0e1, 0x039be5, 0xb3e5fc],
+            grass:  [0x7cb342, 0x9ccc65, 0x8bc34a, 0xc5e1a5, 0x689f38, 0xaed581],
+            galaxy: [0x7e57c2, 0x5e35b1, 0x9575cd, 0xb388ff, 0x4527a0, 0x673ab7]
+        };
+        const GENSHIN_REJOIN_PCT = 70;             // 积分达到此值 → 三个场景统一接回原神终章
+        // 真实 CC0 GLB 模型模板（Quaternius，见 assets/scene_props/LICENSE.md）：草地树木 / 海上城市建筑
+        let sceneTreeTemplates = [], sceneBuildingTemplates = [];
+        let _treesLoading = false, _buildingsLoading = false;
+        // 道路：Kenney「Modular Road Kit」(CC0) 的 road_square 片，平铺为无限道路（海上城市/星系）
+        let sceneRoadTemplate = null, sceneRoadTemplateGalaxy = null, _roadLoading = false;
+        const sceneRoadTiles = [];
+        let sceneRoadTileLen = 12, sceneRoadSurfaceY = 0.4, _roadCursorZ = 0;
+        // 草地：eztree(assets/tree) 的地面贴图 + 草丛/石头/花，还原 eztree.dev 真实草场
+        let grassBladeTemplates = [], rockTemplates = [], flowerTemplates = [];
+        let grassGroundTex = null, dirtGroundTex = null, _grassAssetsLoading = false;
 
         // 共享金币几何体/材质
         let coinGeo, coinMat, coinMatLarge, coinMatRare;
@@ -1218,9 +1253,14 @@
         // ==================== 障碍物 ====================
         function spawnObstacle() {
             if (genshinActive) return; // 原神场景模式下不生成障碍物
+            if (sceneGateActive) return; // 选门走廊期间不生成障碍物
             const lane = Math.floor(Math.random() * 3) - 1;
             let obs, ty;
-            if (genshinActive) {
+            if (currentScene) {
+                // 新场景（海上城市/草地/星系）换皮障碍物，沿用三车道生成/碰撞/计分逻辑
+                const r = makeSceneObstacle(currentScene);
+                obs = r.obs; ty = r.ty;
+            } else if (genshinActive) {
                 // 原神风格障碍：断裂石柱 / 浮空岩（翻滚）/ 晶簇（CC0 模型，兜底程序化）
                 const type = Math.floor(Math.random() * 3);
                 if (type === 0) { obs = gMakeStonePillar(); ty = 0; }
@@ -1524,7 +1564,15 @@
                 const hudPct = document.getElementById('genshin-pct');
                 if (hudPct) hudPct.textContent = pctInt;
             }
-            if (!genshinActive && pct >= GENSHIN_ENTER_PCT) enterGenshinScene();
+            // 积分达到30% → 弹出三扇门，玩家选择进入新跑酷场景（取代原50%自动切入原神场景）
+            if (!sceneGateTriggered && !genshinActive && pct >= SCENE_GATE_PCT) {
+                sceneGateTriggered = true;
+                triggerSceneGate();
+            }
+            // 仅当未启用多场景系统时，才保留原50%自动切入原神场景的流程
+            if (!sceneGateTriggered && !sceneChosen && !genshinActive && pct >= GENSHIN_ENTER_PCT) enterGenshinScene();
+            // 积分达到70% → 无论玩家选了哪个场景，都统一接回原神终章（70%→100% 冲门结算）
+            if (sceneChosen && !genshinActive && !genshinEntering && pct >= GENSHIN_REJOIN_PCT) enterGenshinScene();
             if (pct >= 100) endGame();
         }
 
@@ -3526,6 +3574,7 @@
         // ==================== 装饰物 ====================
         function spawnDecoration() {
             if (genshinActive) return; // 原神场景模式下不再生成梦核装饰物
+            if (currentScene) return;  // 新场景由 spawnSceneSideRow 生成专属侧边道具
             const side = Math.random() > 0.5 ? 1 : -1;
             const offsetX = (8 + Math.random() * 12) * side;
             const type = Math.floor(Math.random() * 5);
@@ -3574,7 +3623,7 @@
             const halfLen = segmentLength / 2, halfWidth = GROUND_WIDTH / 2;
             const colsX = Math.ceil(GROUND_WIDTH / BLOCK_SIZE), colsZ = Math.ceil(segmentLength / BLOCK_SIZE);
             const maxBC = colsX * colsZ;
-            const baseMat = new THREE.MeshLambertMaterial({ color: 0xffd1dc });
+            const baseMat = new THREE.MeshLambertMaterial({ color: groundBaseColor });
             const tempGeo = new THREE.BoxGeometry(BLOCK_SIZE - BLOCK_GAP, 1, BLOCK_SIZE - BLOCK_GAP);
             const iMesh = new THREE.InstancedMesh(tempGeo, baseMat, maxBC);
             const dm = new THREE.Object3D(), col = new THREE.Color();
@@ -3602,7 +3651,7 @@
             iMesh.count = idx; iMesh.instanceMatrix.needsUpdate = true;
             if (iMesh.instanceColor) iMesh.instanceColor.needsUpdate = true;
             group.add(iMesh); scene.add(group); group._iMesh = iMesh;
-            group.visible = !genshinActive; // 原神场景模式下地面隐藏
+            group.visible = !genshinActive && !currentScene; // 原神/新场景模式下隐藏方块地面（改用GLB道路/草地）
 
             if (animateIn && bd.length > 0) {
                 group._animateIn = function () {
@@ -3640,7 +3689,7 @@
             const pts = [new THREE.Vector3(0, 0.08, -segmentLength / 2), new THREE.Vector3(0, 0.08, segmentLength / 2)];
             const g = new THREE.BufferGeometry().setFromPoints(pts);
             const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.12 }));
-            line.position.set(laneX, 0, centerZ); line.visible = !genshinActive; scene.add(line); return line;
+            line.position.set(laneX, 0, centerZ); line.visible = !genshinActive && !currentScene; scene.add(line); return line;
         }
 
         function disposeMesh(mesh) {
@@ -3676,6 +3725,560 @@
                 const g = createGroundSegment(z, true); groundSegments.push(g);
                 if (g._animateIn) g._animateIn();
                 ['-4', '0', '4'].forEach(k => { laneSegments[k].push(createLaneSegment(parseInt(k), z)); });
+            }
+        }
+
+        // ==================== 多场景：调色板预设 ====================
+        function getScenePreset(key) {
+            if (key === 'sea') return {
+                topColor: new THREE.Color(0x06243f), midColor: new THREE.Color(0x1976d2), bottomColor: new THREE.Color(0x7fd6f5),
+                sunY: 0.16, sunColor: new THREE.Color(0xfff2c8), exponent: 0.6,
+                fogColor: new THREE.Color(0x2b87c4), fogNear: 16, fogFar: 85,
+                bloom: 0.55, vignette: { darkness: 0.0, offset: 1.1 },
+                groundBase: 0xbfe6ff, playerCol: new THREE.Color(0xe3f6ff),
+                ambient: 0xbfe0ff, ambientI: 0.78, dirCol: 0xfff2cc, dirI: 0.7
+            };
+            if (key === 'grass') return {
+                topColor: new THREE.Color(0x3d7ec4), midColor: new THREE.Color(0x9fd8f0), bottomColor: new THREE.Color(0xd6f3a8),
+                sunY: 0.2, sunColor: new THREE.Color(0xfff6d0), exponent: 0.7,
+                fogColor: new THREE.Color(0xcdebab), fogNear: 22, fogFar: 95,
+                bloom: 0.38, vignette: { darkness: 0.0, offset: 1.15 },
+                groundBase: 0xd4eea0, playerCol: new THREE.Color(0xfff3c4),
+                ambient: 0xeaffd0, ambientI: 0.9, dirCol: 0xfff6d0, dirI: 0.8
+            };
+            // galaxy
+            return {
+                topColor: new THREE.Color(0x02010a), midColor: new THREE.Color(0x190a36), bottomColor: new THREE.Color(0x3d1f7a),
+                sunY: 0.08, sunColor: new THREE.Color(0xb388ff), exponent: 0.85,
+                fogColor: new THREE.Color(0x0a0524), fogNear: 18, fogFar: 100,
+                bloom: 0.9, vignette: { darkness: 1.4, offset: 0.95 },
+                groundBase: 0x5a3da8, playerCol: new THREE.Color(0x84ffff),
+                ambient: 0x4a3a80, ambientI: 0.55, dirCol: 0xb388ff, dirI: 0.6
+            };
+        }
+
+        // 场景内每帧维护（亮度随注意力轻微起伏，调色板已在 applyScene 时切换）
+        function applyScenePalette(att) {
+            const p = getScenePreset(currentScene);
+            if (composer.passes[1]) {
+                const target = p.bloom * (0.75 + att / 220);
+                composer.passes[1].strength += (target - composer.passes[1].strength) * 0.1;
+            }
+            if (player && player.material) {
+                const ei = THREE.MathUtils.clamp(0.3 + att / 160, 0.2, 1.4);
+                player.material.emissiveIntensity = THREE.MathUtils.lerp(player.material.emissiveIntensity || 0.3, ei, 0.1);
+            }
+        }
+
+        // 重新着色现有地面分段（即时切换场景配色）
+        function retintGround() {
+            const col = new THREE.Color();
+            groundSegments.forEach(seg => {
+                const im = seg._iMesh; if (!im) return;
+                im.material.color.set(groundBaseColor);
+                for (let i = 0; i < im.count; i++) {
+                    col.setHex(BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)]);
+                    im.setColorAt(i, col);
+                }
+                if (im.instanceColor) im.instanceColor.needsUpdate = true;
+            });
+        }
+
+        // ==================== 多场景：进入与环境切换 ====================
+        function applyScene(key) {
+            currentScene = key; sceneChosen = true;
+            const p = getScenePreset(key);
+            // 地面配色（新生成 + 现有分段）
+            BLOCK_COLORS = SCENE_BLOCK_COLORS[key];
+            groundBaseColor = p.groundBase;
+            retintGround();
+            // 天空 / 雾 / bloom / 暗角 直接切到场景预设
+            if (skyMesh) {
+                const u = skyMesh.material.uniforms;
+                u.topColor.value.copy(p.topColor); u.midColor.value.copy(p.midColor); u.bottomColor.value.copy(p.bottomColor);
+                u.sunY.value = p.sunY; u.sunColor.value.copy(p.sunColor); u.exponent.value = p.exponent;
+            }
+            scene.fog.color.copy(p.fogColor); scene.fog.near = p.fogNear; scene.fog.far = p.fogFar;
+            if (composer.passes[1]) composer.passes[1].strength = p.bloom;
+            if (composer.passes[2]) {
+                composer.passes[2].uniforms["darkness"].value = p.vignette.darkness;
+                composer.passes[2].uniforms["offset"].value = p.vignette.offset;
+            }
+            // 灯光 / 角色
+            if (runnerAmbient) { runnerAmbient.color.set(p.ambient); runnerAmbient.intensity = p.ambientI; }
+            if (runnerDirLight) { runnerDirLight.color.set(p.dirCol); runnerDirLight.intensity = p.dirI; }
+            if (player && player.material) { player.material.color.set(p.playerCol); if (player.material.emissive) player.material.emissive.set(p.playerCol); }
+            if (playerGroup && playerGroup._pointLight) playerGroup._pointLight.color.set(p.playerCol);
+            // 隐藏丑陋的方块地面/车道线，改用 GLB 道路（海/星系）或 eztree 草地（草地）
+            groundSegments.forEach(g => { g.visible = false; });
+            Object.keys(laneSegments).forEach(k => laneSegments[k].forEach(s => { s.visible = false; }));
+            // 场景专属背景与道路
+            clearSingletons();
+            if (key === 'sea') { buildWater(); _roadCursorZ = playerGroup.position.z + 20; }
+            else if (key === 'galaxy') { buildGalaxy(); buildWave(); buildStars(); _roadCursorZ = playerGroup.position.z + 20; }
+            else if (key === 'grass') { buildGrassGround(); }
+            _scenePropCursorZ = playerGroup.position.z - 25;
+        }
+
+        function clearSingletons() {
+            Object.keys(sceneSingletons).forEach(k => {
+                const o = sceneSingletons[k];
+                if (o) { scene.remove(o); disposeMesh(o); }
+                sceneSingletons[k] = null;
+            });
+            clearSceneRoad();
+        }
+
+        // ---------- 海上城市：水面着色器（参考 waterSky） ----------
+        function buildWater() {
+            const geo = new THREE.PlaneGeometry(700, 700, 80, 80);
+            const mat = new THREE.ShaderMaterial({
+                transparent: true, side: THREE.DoubleSide,
+                uniforms: {
+                    time: { value: 0 },
+                    deepColor: { value: new THREE.Color(0x063b66) },
+                    surfColor: { value: new THREE.Color(0x2f9fd4) },
+                    skyColor: { value: new THREE.Color(0x9fe3ff) }
+                },
+                vertexShader: `uniform float time; varying float vH;
+                    void main(){ vec3 p=position;
+                        float w = sin(p.x*0.05+time*1.2)*0.7 + sin(p.y*0.07-time*0.9)*0.5 + sin((p.x+p.y)*0.03+time*0.6)*0.4;
+                        p.z += w; vH = w;
+                        gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0); }`,
+                fragmentShader: `uniform vec3 deepColor,surfColor,skyColor; varying float vH;
+                    void main(){ float t=clamp(vH*0.45+0.5,0.0,1.0);
+                        vec3 c=mix(deepColor,surfColor,t); c=mix(c,skyColor,0.22);
+                        c += skyColor*pow(max(vH,0.0),3.0)*0.35;
+                        gl_FragColor=vec4(c,0.9); }`
+            });
+            const m = new THREE.Mesh(geo, mat);
+            m.rotation.x = -Math.PI / 2; m.position.y = -2.2; m.renderOrder = -1;
+            scene.add(m); sceneSingletons.water = m;
+        }
+
+        // ---------- 星系：螺旋星系粒子（参考 galaxyStar） ----------
+        function buildGalaxy() {
+            const N = 7000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+            const inside = new THREE.Color(0xffb066), outside = new THREE.Color(0x5fa8ff), c = new THREE.Color();
+            const branches = 4, spin = 0.9, R = 160;
+            for (let i = 0; i < N; i++) {
+                const r = Math.pow(Math.random(), 1.6) * R;
+                const branch = ((i % branches) / branches) * Math.PI * 2;
+                const spinA = r * 0.012 * spin;
+                const rx = Math.pow(Math.random(), 3) * (Math.random() < .5 ? 1 : -1) * r * 0.18;
+                const ry = Math.pow(Math.random(), 3) * (Math.random() < .5 ? 1 : -1) * r * 0.06;
+                const rz = Math.pow(Math.random(), 3) * (Math.random() < .5 ? 1 : -1) * r * 0.18;
+                pos[i * 3] = Math.cos(branch + spinA) * r + rx;
+                pos[i * 3 + 1] = ry;
+                pos[i * 3 + 2] = Math.sin(branch + spinA) * r + rz;
+                c.copy(inside).lerp(outside, r / R);
+                col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            const mat = new THREE.PointsMaterial({ size: 0.9, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+            const pts = new THREE.Points(geo, mat); pts.rotation.x = -0.5; pts.position.y = 55;
+            scene.add(pts); sceneSingletons.galaxy = pts;
+        }
+
+        // ---------- 星系：波浪点阵（参考 samplexWave） ----------
+        function buildWave() {
+            const G = 90, S = 260, pos = new Float32Array(G * G * 3);
+            let k = 0;
+            for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) { pos[k++] = (i / (G - 1) - 0.5) * S; pos[k++] = 0; pos[k++] = (j / (G - 1) - 0.5) * S; }
+            const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const mat = new THREE.ShaderMaterial({
+                transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+                uniforms: { time: { value: 0 }, colA: { value: new THREE.Color(0x7c4dff) }, colB: { value: new THREE.Color(0x18ffff) } },
+                vertexShader: `uniform float time; varying float vH;
+                    void main(){ vec3 p=position; float d=length(p.xz);
+                        float y=sin(d*0.10 - time*2.0)*2.2*exp(-d*0.010); p.y=y; vH=y;
+                        vec4 mv=modelViewMatrix*vec4(p,1.0);
+                        gl_PointSize=3.0*(120.0/max(-mv.z,1.0)); gl_Position=projectionMatrix*mv; }`,
+                fragmentShader: `uniform vec3 colA,colB; varying float vH;
+                    void main(){ vec2 c=gl_PointCoord-0.5; if(dot(c,c)>0.25) discard;
+                        vec3 col=mix(colA,colB,clamp(vH*0.3+0.5,0.0,1.0)); gl_FragColor=vec4(col,0.85); }`
+            });
+            const pts = new THREE.Points(geo, mat); pts.position.y = -3.5;
+            scene.add(pts); sceneSingletons.wave = pts;
+        }
+
+        // ---------- 星系：远景星空 ----------
+        function buildStars() {
+            const N = 1400, pos = new Float32Array(N * 3);
+            for (let i = 0; i < N; i++) {
+                const r = 300 + Math.random() * 120, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+                pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
+                pos[i * 3 + 1] = Math.abs(r * Math.cos(ph)) * 0.8 + 20;
+                pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+            }
+            const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, sizeAttenuation: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+            const pts = new THREE.Points(geo, mat); scene.add(pts); sceneSingletons.stars = pts;
+        }
+
+        // 带 Draco 解码的 GLTFLoader（部分 CC0 模型用 KHR_draco_mesh_compression 压缩，如 eztree 石头）
+        let _dracoLoader = null;
+        function getGLTFLoader() {
+            const loader = new THREE.GLTFLoader();
+            if (typeof THREE.DRACOLoader === 'function') {
+                if (!_dracoLoader) {
+                    _dracoLoader = new THREE.DRACOLoader();
+                    _dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+                }
+                loader.setDRACOLoader(_dracoLoader);
+            }
+            return loader;
+        }
+
+        // ---------- 真实 CC0 GLB 模型加载（草地树木 / 海上城市建筑，归一化为可复用模板） ----------
+        function loadTreeModels() {
+            if (_treesLoading || sceneTreeTemplates.length) return;
+            _treesLoading = true;
+            const loader = getGLTFLoader();
+            ['assets/scene_props/pine_tree.glb', 'assets/scene_props/tree.glb'].forEach(p => {
+                loader.load(p, gltf => {
+                    const wrap = gNormalizeProp(gltf.scene, 1, true); // 归一到1单位、底部对齐 y=0
+                    wrap._sharedAssets = true; sceneTreeTemplates.push(wrap);
+                }, undefined, () => console.warn('[场景] 树模型加载失败，使用程序化兜底', p));
+            });
+        }
+        function loadBuildingModels() {
+            if (_buildingsLoading || sceneBuildingTemplates.length) return;
+            _buildingsLoading = true;
+            const loader = getGLTFLoader();
+            ['assets/scene_props/business_building.glb', 'assets/scene_props/house.glb', 'assets/scene_props/town_center.glb'].forEach(p => {
+                loader.load(p, gltf => {
+                    const wrap = gNormalizeProp(gltf.scene, 1, true);
+                    wrap._sharedAssets = true; sceneBuildingTemplates.push(wrap);
+                }, undefined, () => console.warn('[场景] 建筑模型加载失败，使用程序化兜底', p));
+            });
+        }
+
+        // ---------- 道路：Kenney Modular Road Kit（CC0）road_square 片，无限平铺 ----------
+        function loadRoadModel() {
+            if (_roadLoading || sceneRoadTemplate) return;
+            _roadLoading = true;
+            getGLTFLoader().load('assets/scene_props/road_kit.glb', gltf => {
+                const piece = gltf.scene.getObjectByName('road_square') || gltf.scene.getObjectByName('road_straightBarrier');
+                if (!piece) { _roadLoading = false; return; }
+                const p = piece.clone(true); p.position.set(0, 0, 0); p.rotation.set(0, 0, 0); p.scale.set(1, 1, 1);
+                const wrap = new THREE.Group(); wrap.add(p);
+                let box = new THREE.Box3().setFromObject(wrap);
+                const size = box.getSize(new THREE.Vector3());
+                p.scale.setScalar(12 / Math.max(size.x, size.z, 0.001)); // 按平面最大边归一到~12（覆盖车道±4）
+                box = new THREE.Box3().setFromObject(wrap);
+                const c = box.getCenter(new THREE.Vector3());
+                p.position.x -= c.x; p.position.z -= c.z; p.position.y -= box.min.y; // xz居中、底部对齐 y=0
+                box = new THREE.Box3().setFromObject(wrap);
+                sceneRoadTileLen = Math.max(2, box.max.z - box.min.z);  // 缩放后进深=平铺步长
+                sceneRoadSurfaceY = box.max.y - box.min.y;              // 厚度（用于把路面对齐到 y≈0）
+                wrap._sharedAssets = true; sceneRoadTemplate = wrap; _roadLoading = false;
+            }, undefined, () => { _roadLoading = false; console.warn('[场景] road_kit.glb 加载失败'); });
+        }
+        function getRoadTemplate() {
+            if (currentScene === 'galaxy') {
+                if (!sceneRoadTemplateGalaxy && sceneRoadTemplate) {
+                    const g = sceneRoadTemplate.clone(true); g._sharedAssets = true;
+                    g.traverse(o => {
+                        if (o.isMesh) {
+                            const base = (o.material && o.material.color) ? o.material.color.clone() : new THREE.Color(0x6644aa);
+                            o.material = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.32), emissive: base, emissiveIntensity: 0.7, metalness: 0.5, roughness: 0.3 });
+                        }
+                    });
+                    sceneRoadTemplateGalaxy = g;
+                }
+                return sceneRoadTemplateGalaxy || sceneRoadTemplate;
+            }
+            return sceneRoadTemplate;
+        }
+        function spawnRoadTile(z) {
+            const tpl = getRoadTemplate(); if (!tpl) return;
+            const t = tpl.clone(true); t._sharedAssets = true;
+            t.position.set(0, -sceneRoadSurfaceY - 0.05, z); // 路面顶部对齐到 y≈0
+            scene.add(t); sceneRoadTiles.push(t);
+        }
+        function clearSceneRoad() { for (let i = sceneRoadTiles.length - 1; i >= 0; i--) scene.remove(sceneRoadTiles[i]); sceneRoadTiles.length = 0; }
+
+        // ---------- 草地：eztree (assets/tree) 地面 + 草丛/石/花 ----------
+        const GRASS_SIMPLEX = `
+            vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+            vec2 mod289(vec2 x){return x-floor(x*(1.0/289.0))*289.0;}
+            vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+            float simplex2d(vec2 v){const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
+                vec2 i=floor(v+dot(v,C.yy));vec2 x0=v-i+dot(i,C.xx);vec2 i1;i1=(x0.x>x0.y)?vec2(1.0,0.0):vec2(0.0,1.0);
+                vec4 x12=x0.xyxy+C.xxzz;x12.xy-=i1;i=mod289(i);
+                vec3 p=permute(permute(i.y+vec3(0.0,i1.y,1.0))+i.x+vec3(0.0,i1.x,1.0));
+                vec3 m=max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.0);m=m*m;m=m*m;
+                vec3 x=2.0*fract(p*C.www)-1.0;vec3 h=abs(x)-0.5;vec3 ox=floor(x+0.5);vec3 a0=x-ox;
+                m*=1.79284291400159-0.85373472095314*(a0*a0+h*h);
+                vec3 g;g.x=a0.x*x0.x+h.x*x0.y;g.yz=a0.yz*x12.xz+h.yz*x12.yw;return 130.0*dot(m,g);}`;
+        function loadGrassEztreeAssets() {
+            if (_grassAssetsLoading) return; _grassAssetsLoading = true;
+            const base = 'assets/tree/src/app/public/';
+            const TL = new THREE.TextureLoader();
+            // 地面贴图取自 scene_props（eztree 原仓库中的 textures 为 Git LFS 占位，故另存真实贴图）
+            grassGroundTex = TL.load('assets/scene_props/ground_grass.jpg');
+            grassGroundTex.wrapS = grassGroundTex.wrapT = THREE.RepeatWrapping; // 不标 sRGB：本游戏渲染器为线性(未启用色彩管理)，标 sRGB 会偏暗
+            dirtGroundTex = TL.load('assets/scene_props/ground_dirt_color.jpg');
+            dirtGroundTex.wrapS = dirtGroundTex.wrapT = THREE.RepeatWrapping;
+            const GL = getGLTFLoader();
+            GL.load(base + 'models/grass.glb', g => { const w = gNormalizeProp(g.scene, 1.3, true); w._sharedAssets = true; grassBladeTemplates.push(w); }, undefined, () => {});
+            ['rock1', 'rock2', 'rock3'].forEach(r => GL.load(base + 'models/' + r + '.glb', g => { const w = gNormalizeProp(g.scene, 1.1, true); w._sharedAssets = true; rockTemplates.push(w); }, undefined, () => {}));
+            ['flower_blue', 'flower_white', 'flower_yellow'].forEach(r => GL.load(base + 'models/' + r + '.glb', g => { const w = gNormalizeProp(g.scene, 0.9, true); w._sharedAssets = true; flowerTemplates.push(w); }, undefined, () => {}));
+        }
+        function buildGrassGround() {
+            if (sceneSingletons.grass || !grassGroundTex) return;
+            const geo = new THREE.PlaneGeometry(800, 800);
+            grassGroundTex.repeat.set(800 / 22, 800 / 22); // 世界尺度平铺（~22单位/格）
+            const mat = new THREE.MeshLambertMaterial({ map: grassGroundTex });
+            const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = -0.15; m.renderOrder = -2;
+            m.receiveShadow = true; scene.add(m); sceneSingletons.grass = m;
+        }
+
+        // ---------- 侧边场景道具（参考 cityEffect / eztree，随 z 无限滚动） ----------
+        function addSceneDeco(obj) {
+            obj._deco = true; scene.add(obj); decorations.push(obj);
+            const sx = obj.scale.x, sy = obj.scale.y, sz = obj.scale.z;
+            obj.scale.set(sx * 0.01, sy * 0.01, sz * 0.01);
+            gsap.to(obj.scale, { x: sx, y: sy, z: sz, duration: 0.7, ease: "power2.out" });
+        }
+        function makeGrassTree() {
+            if (!sceneTreeTemplates.length) return null;
+            const m = sceneTreeTemplates[Math.floor(Math.random() * sceneTreeTemplates.length)].clone(true); m._sharedAssets = true;
+            m.scale.setScalar(3.0 + Math.random() * 3.2); m.rotation.y = Math.random() * Math.PI * 2; return m;
+        }
+        function makeGrassClump() {
+            const m = grassBladeTemplates[Math.floor(Math.random() * grassBladeTemplates.length)].clone(true); m._sharedAssets = true;
+            m.scale.setScalar(0.8 + Math.random() * 1.0); m.rotation.y = Math.random() * Math.PI * 2; return m;
+        }
+        // 草地一整排：两侧稀疏树木 + 全宽散布草丛/花/石（eztree.dev 风格）
+        function spawnGrassRow(z) {
+            if (Math.random() < 0.5) { const t = makeGrassTree(); if (t) { t.position.set((Math.random() < 0.5 ? -1 : 1) * (9 + Math.random() * 16), 0, z + (Math.random() - 0.5) * 5); addSceneDeco(t); } }
+            const n = 3 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < n; i++) {
+                const r = Math.random(); let o = null;
+                if (r < 0.6 && grassBladeTemplates.length) o = makeGrassClump();
+                else if (r < 0.8 && flowerTemplates.length) { o = flowerTemplates[Math.floor(Math.random() * flowerTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.7 + Math.random() * 0.6); }
+                else if (rockTemplates.length) { o = rockTemplates[Math.floor(Math.random() * rockTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.7 + Math.random() * 1.0); o.rotation.y = Math.random() * Math.PI * 2; }
+                if (!o) continue;
+                o.position.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 30), 0, z + (Math.random() - 0.5) * 6);
+                addSceneDeco(o);
+            }
+        }
+
+        function _cityWindowTex() {
+            if (_cityTexCache) return _cityTexCache;
+            const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
+            x.fillStyle = '#0a1420'; x.fillRect(0, 0, 64, 128);
+            for (let yy = 6; yy < 124; yy += 10) for (let xx = 6; xx < 60; xx += 12) {
+                if (Math.random() < 0.55) { x.fillStyle = Math.random() < 0.5 ? '#ffe08a' : '#9fe8ff'; x.fillRect(xx, yy, 7, 6); }
+            }
+            const t = new THREE.CanvasTexture(cv); _cityTexCache = t; return t;
+        }
+        function makeSeaProp() {
+            // 优先使用真实 CC0 建筑模型（business_building / house / town_center）
+            if (sceneBuildingTemplates.length) {
+                const tpl = sceneBuildingTemplates[Math.floor(Math.random() * sceneBuildingTemplates.length)];
+                const m = tpl.clone(true); m._sharedAssets = true;
+                const s = 2.6 + Math.random() * 2.6;
+                m.scale.set(s, s * (1.0 + Math.random() * 1.4), s); // 高度随机拉伸形成天际线
+                m.rotation.y = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.4;
+                m.position.y = -2; // 底部坐落在水面上
+                return m;
+            }
+            // 程序化兜底：发光窗户高楼（参考 cityEffect）
+            const h = 6 + Math.random() * 20, w = 3 + Math.random() * 3.5;
+            const tex = _cityWindowTex().clone(); tex.needsUpdate = true;
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(Math.max(1, Math.round(w / 2)), Math.max(2, Math.round(h / 4)));
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w),
+                new THREE.MeshStandardMaterial({ color: 0x0c1a2c, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.9, metalness: 0.3, roughness: 0.7 }));
+            m.position.y = -2 + h / 2; return m;
+        }
+        function makeGrassProp() {
+            // 优先使用真实 CC0 树木模型（tree / pine_tree）
+            if (sceneTreeTemplates.length && Math.random() < 0.85) {
+                const tpl = sceneTreeTemplates[Math.floor(Math.random() * sceneTreeTemplates.length)];
+                const m = tpl.clone(true); m._sharedAssets = true;
+                m.scale.setScalar(3.0 + Math.random() * 3.2);
+                m.rotation.y = Math.random() * Math.PI * 2;
+                return m;
+            }
+            // 程序化兜底：低多边形树 / 草丛
+            if (Math.random() < 0.3) { // 草丛
+                const g = new THREE.Group();
+                for (let i = 0; i < 5; i++) {
+                    const b = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.8 + Math.random() * 0.5, 4), new THREE.MeshLambertMaterial({ color: 0x6fbf3a }));
+                    b.position.set((Math.random() - 0.5) * 0.8, 0.4, (Math.random() - 0.5) * 0.8); b.rotation.z = (Math.random() - 0.5) * 0.3; g.add(b);
+                }
+                return g;
+            }
+            const g = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 1.6, 6), new THREE.MeshLambertMaterial({ color: 0x7b4a2b })); trunk.position.y = 0.8; g.add(trunk);
+            const greens = [0x4f9e2f, 0x5fb53a, 0x3f8a28];
+            const layers = 2 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < layers; i++) {
+                const s = 1.4 - i * 0.35;
+                const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), new THREE.MeshLambertMaterial({ color: greens[i % greens.length], flatShading: true }));
+                f.position.y = 1.7 + i * 0.9; g.add(f);
+            }
+            g.scale.setScalar(0.8 + Math.random() * 0.7); return g;
+        }
+        function makeGalaxyProp() {
+            const cols = [0xb388ff, 0x18ffff, 0xff80ab];
+            const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.5 + Math.random() * 0.8, 0),
+                new THREE.MeshStandardMaterial({ color: cols[Math.floor(Math.random() * cols.length)], emissive: cols[Math.floor(Math.random() * cols.length)], emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.2 }));
+            m.position.y = 1.5 + Math.random() * 7; m._spin = true; m._float = true; return m;
+        }
+        function spawnSceneSideRow(z) {
+            if (currentScene === 'grass') { spawnGrassRow(z); return; } // 草地：eztree 全宽散布
+            const make = currentScene === 'sea' ? makeSeaProp : makeGalaxyProp;
+            const sides = Math.random() < 0.7 ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1];
+            sides.forEach(side => {
+                const obj = make(); if (!obj) return;
+                obj.position.x = side * (13 + Math.random() * 16);
+                obj.position.z = z + (Math.random() - 0.5) * 6;
+                addSceneDeco(obj);
+            });
+        }
+
+        // 场景障碍物（换皮，沿用原跑酷三车道生成/碰撞/计分逻辑）
+        function makeSceneObstacle(key) {
+            let obs, ty = 0.6;
+            if (key === 'sea') {
+                obs = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3),
+                    new THREE.MeshStandardMaterial({ color: 0x0e3a5a, emissive: 0xff7043, emissiveIntensity: 0.4, metalness: 0.4, roughness: 0.5 })); ty = 0.7;
+            } else if (key === 'grass') {
+                if (Math.random() < 0.5) { obs = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 0), new THREE.MeshLambertMaterial({ color: 0x8d99ae, emissive: 0x5a6472, emissiveIntensity: 0.15, flatShading: true })); ty = 0.55; }
+                else { obs = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.4, 8), new THREE.MeshLambertMaterial({ color: 0x7b4a2b, emissive: 0x4a2c1a, emissiveIntensity: 0.1 })); obs.rotation.z = Math.PI / 2; ty = 0.5; }
+            } else {
+                obs = new THREE.Mesh(new THREE.OctahedronGeometry(0.7, 0), new THREE.MeshStandardMaterial({ color: 0xb388ff, emissive: 0x7c4dff, emissiveIntensity: 0.7, metalness: 0.5, roughness: 0.2 })); obs._spin = true; ty = 0.7;
+            }
+            return { obs, ty };
+        }
+
+        // ==================== 多场景：三扇门选择闸口 ====================
+        function _roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+        function makeDoorLabel(text, hex) {
+            const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96; const x = cv.getContext('2d');
+            const col = '#' + hex.toString(16).padStart(6, '0');
+            x.fillStyle = 'rgba(8,12,24,0.85)'; _roundRect(x, 4, 4, 248, 88, 16); x.fill();
+            x.lineWidth = 4; x.strokeStyle = col; _roundRect(x, 4, 4, 248, 88, 16); x.stroke();
+            x.fillStyle = '#ffffff'; x.font = 'bold 44px "Microsoft YaHei",sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+            x.fillText(text, 128, 52);
+            const tex = new THREE.CanvasTexture(cv);
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+            sp.scale.set(3.2, 1.2, 1); return sp;
+        }
+        function makeDoor(x, key) {
+            const meta = SCENE_META[key], col = meta.color;
+            const g = new THREE.Group(); g.position.set(x, 0, sceneDoorZ); g._sceneKey = key;
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x101820, emissive: col, emissiveIntensity: 0.8, metalness: 0.6, roughness: 0.3 });
+            const W = 3.2, H = 5.2, T = 0.28;
+            const post = (px) => { const p = new THREE.Mesh(new THREE.BoxGeometry(T, H, T), frameMat); p.position.set(px, H / 2, 0); g.add(p); };
+            post(-W / 2); post(W / 2);
+            const lint = new THREE.Mesh(new THREE.BoxGeometry(W + T, T, T), frameMat); lint.position.set(0, H, 0); g.add(lint);
+            const portal = new THREE.Mesh(new THREE.PlaneGeometry(W - T, H - T), new THREE.ShaderMaterial({
+                transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+                uniforms: { time: { value: 0 }, color: { value: new THREE.Color(col) } },
+                vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+                fragmentShader: `uniform float time; uniform vec3 color; varying vec2 vUv;
+                    void main(){ vec2 c=vUv-0.5; float r=length(c); float a=atan(c.y,c.x);
+                        float sw=sin(a*5.0+time*3.0-r*14.0)*0.5+0.5; float gg=smoothstep(0.55,0.05,r);
+                        gl_FragColor=vec4(color*(0.5+sw*0.9), gg*(0.45+0.55*sw)); }`
+            }));
+            portal.position.set(0, H / 2, -0.02); g.add(portal); g._portal = portal;
+            const lbl = makeDoorLabel(meta.name, col); lbl.position.set(0, H + 0.9, 0); g.add(lbl); g._label = lbl; g._labelBaseY = H + 0.9;
+            const pl = new THREE.PointLight(col, 1.2, 14); pl.position.set(0, H / 2, 0.5); g.add(pl);
+            g.scale.set(0.001, 0.001, 0.001); gsap.to(g.scale, { x: 1, y: 1, z: 1, duration: 0.7, ease: "back.out(1.6)" });
+            return g;
+        }
+        function buildDoors() {
+            SCENE_LANE_ORDER.forEach((key, i) => { const d = makeDoor(LANE_X_POSITIONS[i], key); sceneDoors.push(d); scene.add(d); });
+        }
+        function clearDoors() { sceneDoors.forEach(d => { gsap.killTweensOf(d.scale); scene.remove(d); disposeMesh(d); }); sceneDoors.length = 0; }
+
+        function triggerSceneGate() {
+            if (sceneGateActive || sceneChosen) return;
+            sceneGateActive = true;
+            loadTreeModels(); loadBuildingModels(); loadRoadModel(); loadGrassEztreeAssets(); // 预载真实模型/道路/草地资源
+            sceneDoorZ = playerGroup.position.z - 70;
+            // 清空当前障碍，腾出选择走廊
+            obstacles.forEach(o => { gsap.killTweensOf(o.position); gsap.killTweensOf(o.scale); scene.remove(o); disposeMesh(o); }); obstacles.length = 0;
+            buildDoors();
+            showSceneGateHint();
+        }
+        function updateDoorGate(dt, now) {
+            const t = now * 0.001;
+            sceneDoors.forEach(d => {
+                if (d._portal) d._portal.material.uniforms.time.value = t;
+                if (d._label) d._label.position.y = d._labelBaseY + Math.sin(t * 2 + d.position.x) * 0.12;
+            });
+            if (playerGroup.position.z <= sceneDoorZ + 1.5) {
+                let best = null, bd = 1e9;
+                sceneDoors.forEach(d => { const dx = Math.abs(d.position.x - playerGroup.position.x); if (dx < bd) { bd = dx; best = d; } });
+                if (best) chooseScene(best._sceneKey);
+            }
+        }
+        function chooseScene(key) {
+            if (!sceneGateActive) return;
+            sceneGateActive = false;
+            const meta = SCENE_META[key];
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:fixed;inset:0;z-index:900;pointer-events:none;background:#fff;opacity:0;';
+            document.body.appendChild(flash);
+            gsap.to(flash, {
+                opacity: 1, duration: 0.35, ease: 'power2.in',
+                onComplete: () => {
+                    clearDoors(); applyScene(key); hideSceneGateHint(); showSceneToast(meta.name);
+                    gsap.to(flash, { opacity: 0, duration: 0.6, ease: 'power2.out', onComplete: () => flash.remove() });
+                }
+            });
+        }
+
+        // 闸口 / 进场 UI 提示
+        function showSceneGateHint() {
+            let el = document.getElementById('scene-gate-hint');
+            if (!el) {
+                el = document.createElement('div'); el.id = 'scene-gate-hint';
+                el.style.cssText = 'position:fixed;top:16%;left:50%;transform:translateX(-50%);z-index:60;text-align:center;pointer-events:none;font-family:"Microsoft YaHei",sans-serif;opacity:0;transition:opacity .5s;';
+                el.innerHTML = '<div style="font-size:26px;font-weight:800;color:#fff;text-shadow:0 0 16px rgba(120,180,255,.9);letter-spacing:4px;">选择一扇门，进入新世界</div>'
+                    + '<div style="margin-top:8px;font-size:15px;color:rgba(220,235,255,.85);">切换车道对准：<span style="color:#4fc3f7">海上城市</span> · <span style="color:#7cd66a">草地</span> · <span style="color:#b388ff">星系</span></div>';
+                document.body.appendChild(el);
+            }
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+        }
+        function hideSceneGateHint() { const el = document.getElementById('scene-gate-hint'); if (el) el.style.opacity = '0'; }
+        function showSceneToast(name) {
+            const el = document.createElement('div');
+            el.style.cssText = 'position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);z-index:70;font-family:"Microsoft YaHei",sans-serif;font-size:40px;font-weight:900;color:#fff;text-shadow:0 0 24px rgba(140,200,255,.95);letter-spacing:8px;opacity:0;pointer-events:none;';
+            el.textContent = '进入 · ' + name; document.body.appendChild(el);
+            gsap.to(el, { opacity: 1, duration: 0.4, onComplete: () => { gsap.to(el, { opacity: 0, duration: 0.8, delay: 1.0, onComplete: () => el.remove() }); } });
+        }
+
+        // ==================== 多场景：每帧环境更新 ====================
+        function updateSceneEnvironment(dt, now) {
+            if (genshinActive) { clearSingletons(); return; } // 接回原神后清除本场景专属背景（水/星系/波浪/星空）
+            if (sceneGateActive) updateDoorGate(dt, now);
+            if (!currentScene) return;
+            const t = now * 0.001, cx = camera.position.x, cz = camera.position.z, s = sceneSingletons;
+            if (s.water) { s.water.position.x = cx; s.water.position.z = cz; s.water.material.uniforms.time.value = t; }
+            if (s.galaxy) { s.galaxy.position.x = cx; s.galaxy.position.z = cz - 60; s.galaxy.rotation.y += dt * 0.04; }
+            if (s.wave) { s.wave.position.x = cx; s.wave.position.z = cz; s.wave.material.uniforms.time.value = t; }
+            if (s.stars) { s.stars.position.x = cx; s.stars.position.z = cz; }
+            if (currentScene === 'grass') { if (!s.grass) buildGrassGround(); if (s.grass) { s.grass.position.x = cx; s.grass.position.z = cz; if (grassGroundTex) grassGroundTex.offset.set(cx / 22, -cz / 22); } } // 贴图随相机反向偏移=世界锁定滚动
+            // GLB 道路（海上城市/星系）随玩家无限平铺
+            if (currentScene === 'sea' || currentScene === 'galaxy') {
+                for (let i = sceneRoadTiles.length - 1; i >= 0; i--) { if (sceneRoadTiles[i].position.z > playerGroup.position.z + 30) { scene.remove(sceneRoadTiles[i]); sceneRoadTiles.splice(i, 1); } }
+                let rg = 0;
+                while (_roadCursorZ > playerGroup.position.z - aheadRange && rg++ < 80) { spawnRoadTile(_roadCursorZ); _roadCursorZ -= sceneRoadTileLen; }
+            }
+            // 侧边道具随玩家前进无限补充
+            const ahead = playerGroup.position.z - 95; let guard = 0;
+            while (_scenePropCursorZ > ahead && guard++ < 40) {
+                spawnSceneSideRow(_scenePropCursorZ);
+                _scenePropCursorZ -= (9 + Math.random() * 7);
             }
         }
 
@@ -3855,6 +4458,7 @@
             if (skyMesh) { skyMesh.position.copy(camera.position); skyMesh.material.uniforms.time.value = now * 0.001; }
 
             updateInfiniteGroundAndLanes();
+            updateSceneEnvironment(dt, now);
             updateJumpParticles(dt);
             updateDustParticles(dt);
 
@@ -4050,6 +4654,8 @@
 
         // ==================== 场景视觉 ====================
         function updateSceneVisuals(att) {
+            // 已选定新场景：使用场景固定调色板（注意力仅轻微调制亮度），不再走梦核三阶段切换
+            if (currentScene) { applyScenePalette(att); return; }
             // 说明：视觉/配色只在注意力向上跨区间（从低阶段上升到更高阶段）时触发切换。
             // 我们维护 currentVisualStage（已应用的阶段）和 stageTransition 来平滑过渡。
             function getPreset(stage) {
@@ -4199,8 +4805,8 @@
             else { score = Math.max(0, score + 5); showScoreChange(5); }
             if (!genshinActive) updateSceneVisuals(att);
 
-            // 注意力>30时也检查觉醒（原神场景中不再触发觉醒）
-            if (att > 30 && !isAwakened && !genshinActive) {
+            // 注意力>30时也检查觉醒（原神场景 / 新场景中不再触发觉醒）
+            if (att > 30 && !isAwakened && !genshinActive && !sceneChosen) {
                 checkAwakening();
             }
         }
