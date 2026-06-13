@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>世界在这里 · 兴趣发现平台</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#F3F0E8;--surface:#FFFFFF;--surface2:#F8F6F2;
+  --text:#1C1A17;--text2:#5A5550;--text3:#9A948C;
+  --accent:#B87428;--accent2:#4A7C6B;
+  --border:#DDD8CF;--r:8px;--rl:12px;--rxl:16px;
+  --shadow:0 4px 20px rgba(28,26,23,.1);--shadow2:0 8px 36px rgba(28,26,23,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text)}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.hdr{height:54px;background:#1C1A17;display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;z-index:1000}
+.hdr-title{color:#F0E8D5;font-size:15px;font-weight:500;letter-spacing:.8px;white-space:nowrap}
+.hdr-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.hdr-spacer{flex:1}
+.nav-btn{padding:6px 16px;border-radius:20px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;white-space:nowrap}
+.nav-btn:hover{border-color:rgba(255,255,255,.4);color:#fff}
+.nav-btn.act{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.content-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+/* map */
+#map-container{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.mode-bar{height:46px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.mode-btn{padding:5px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
+.mode-btn:hover{border-color:var(--accent);color:var(--accent)}
+.mode-btn.act{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.hint{margin-left:auto;font-size:11px;color:var(--text3)}
+.map-and-panel{flex:1;display:flex;overflow:hidden}
+#leaflet-map{flex:1;min-height:0}
+/* markers (no scale with zoom) */
+.map-pin{position:absolute;transform:translate(-50%,-14px);display:flex;flex-direction:column;align-items:center;cursor:pointer;pointer-events:all;user-select:none}
+.pin-circle{width:28px;height:28px;border-radius:50%;background:rgba(184,116,40,.92);border:2.5px solid rgba(255,255,255,.95);box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:14px;transition:transform .15s,background .15s}
+.map-pin:hover .pin-circle,.map-pin.sel .pin-circle{transform:scale(1.25)}
+.map-pin.sel .pin-circle{background:rgba(74,124,107,.92)}
+.pin-name{font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.8);white-space:nowrap;margin-top:2px;letter-spacing:.2px}
+/* explore popup */
+.exp-popup{position:absolute;background:rgba(255,255,255,.97);border-radius:var(--rxl);padding:15px;border:1px solid var(--border);box-shadow:var(--shadow2);width:265px;z-index:800;animation:popIn .18s ease-out;pointer-events:all}
+@keyframes popIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.exp-drag{cursor:move;display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.exp-coords{font-size:10px;color:var(--text3);font-family:'SF Mono',Consolas,monospace;margin-bottom:8px;letter-spacing:.3px}
+.exp-img{width:100%;height:95px;background:var(--surface2);border-radius:6px;border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text3);font-size:11px;margin-bottom:9px;text-align:center;line-height:1.5}
+/* location panel */
+.loc-panel{width:315px;border-left:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden;flex-shrink:0}
+.lp-head{padding:16px 16px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0}
+.lp-scroll{flex:1;overflow-y:auto;padding:14px 16px}
+.lp-foot{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.wonder-row{font-size:12px;color:var(--text);padding:6px 0;border-bottom:1px dashed var(--border);display:flex;gap:7px;line-height:1.4}
+.img-ph{width:100%;height:130px;background:var(--surface2);border:1.5px dashed var(--border);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text3);font-size:11px;margin-bottom:12px;text-align:center;padding:8px;line-height:1.5}
+/* tags */
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;background:#EBE5DB;color:var(--text2);margin:2px}
+/* buttons */
+.primary-btn{width:100%;padding:11px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:all .15s}
+.primary-btn:hover{background:#9E641C;transform:translateY(-1px)}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:4px 6px;line-height:1;border-radius:4px;transition:color .15s}
+.icon-btn:hover{color:var(--text)}
+/* careers */
+.career-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:13px;padding:16px}
+.career-card{background:var(--surface);border-radius:var(--rl);padding:16px;border:1px solid var(--border);cursor:pointer;transition:all .18s}
+.career-card:hover{transform:translateY(-3px);box-shadow:var(--shadow2);border-color:rgba(184,116,40,.3)}
+/* records */
+.rec-layout{display:flex;height:100%;overflow:hidden}
+.rec-sidebar{width:210px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden;flex-shrink:0}
+.rec-main{flex:1;overflow-y:auto;padding:16px}
+.sid-item{padding:7px 10px;border-radius:var(--r);cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin:1px 6px;transition:background .12s}
+.sid-item:hover{background:var(--surface2)}
+.sid-item.act{background:rgba(184,116,40,.12)}
+.sid-label{font-size:12px;color:var(--text);display:flex;align-items:center;gap:5px}
+.sid-item.act .sid-label{color:var(--accent);font-weight:500}
+.badge{font-size:10px;background:#EBE5DB;color:var(--text3);padding:1px 6px;border-radius:8px;flex-shrink:0}
+.rec-card{background:var(--surface);border-radius:var(--rl);padding:14px 15px;border:1px solid var(--border);margin-bottom:10px;animation:fadeIn .2s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideOut{to{opacity:0;transform:translateX(-16px) scaleY(.85)}}
+.rec-del-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:3px 5px;border-radius:4px;transition:all .15s;flex-shrink:0}
+.rec-del-btn:hover{color:#c0392b;background:rgba(192,57,43,.08)}
+/* modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(28,26,23,.45);display:flex;align-items:center;justify-content:center;z-index:3000;backdrop-filter:blur(3px)}
+.modal-overlay.hidden{display:none}
+.modal-box{background:var(--surface);border-radius:var(--rxl);padding:24px;width:92%;max-width:450px;box-shadow:var(--shadow2);animation:modalIn .2s ease-out;max-height:92vh;overflow-y:auto}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.opt-row{display:flex;gap:8px;margin-bottom:4px}
+.opt-btn{flex:1;padding:10px;border-radius:var(--r);border:1px solid var(--border);background:transparent;cursor:pointer;font-family:inherit;text-align:center;transition:all .15s}
+.opt-btn:hover{border-color:var(--accent)}
+.opt-btn.act{border-color:var(--accent);background:rgba(184,116,40,.1)}
+.opt-btn-title{font-size:13px;font-weight:500;color:var(--text)}
+.opt-btn.act .opt-btn-title{color:var(--accent)}
+.opt-btn-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s}
+.chip:hover{border-color:var(--accent)}
+.chip.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.m-input{border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);outline:none;width:100%;transition:border-color .15s}
+.m-input:focus{border-color:var(--accent)}
+.m-textarea{border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);outline:none;width:100%;resize:none;height:74px;line-height:1.6;transition:border-color .15s}
+.m-textarea:focus{border-color:var(--accent)}
+.m-actions{display:flex;gap:8px}
+.btn-cancel{flex:1;padding:10px;border-radius:var(--r);border:1px solid var(--border);background:transparent;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit;transition:all .15s}
+.btn-cancel:hover{background:var(--surface2)}
+.btn-save{flex:2;padding:10px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:all .15s}
+.btn-save:hover{background:#9E641C}
+.btn-save:disabled{background:var(--border);color:var(--text3);cursor:not-allowed}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+/* toast */
+.toast{position:fixed;top:18px;right:18px;padding:11px 18px;border-radius:var(--r);font-size:13px;font-weight:500;color:#fff;box-shadow:var(--shadow2);z-index:9999;animation:toastIn .25s ease-out}
+.toast.success{background:#3A6B5E}
+.toast.error{background:#8B3A3A}
+@keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(18px)}}
+/* empty */
+.empty-state{text-align:center;padding:55px 20px;color:var(--text3)}
+/* misc */
+input{border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);outline:none;transition:border-color .15s}
+input:focus{border-color:var(--accent)}
+.leaflet-container{font-family:inherit!important}
+.leaflet-control-attribution{font-size:9px!important;opacity:.55}
+@media(max-width:640px){
+  .nav-btn{padding:5px 10px;font-size:11px}
+  .loc-panel{width:100%;border-left:none;border-top:1px solid var(--border);height:46vh}
+  .map-and-panel{flex-direction:column}
+  .career-grid{grid-template-columns:1fr 1fr;padding:12px;gap:10px}
+  .rec-sidebar{width:165px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <div class="hdr-title">世界在这里</div>
+    <div class="hdr-dot"></div>
+    <div class="hdr-spacer"></div>
+    <button class="nav-btn act" id="nb-map"     onclick="switchTab('map')">🗺 世界地图</button>
+    <button class="nav-btn"     id="nb-careers" onclick="switchTab('careers')">💼 职业全书</button>
+    <button class="nav-btn"     id="nb-records" onclick="switchTab('records')">📋 兴趣记录</button>
+  </header>
+  <!-- Map (always in DOM, never destroyed) -->
+  <div id="map-container" class="content-area">
+    <div class="mode-bar">
+      <button class="mode-btn act" id="mb-china" onclick="switchMode('china')">🗺 中国地图</button>
+      <button class="mode-btn" id="mb-world" onclick="switchMode('world')">🌍 世界各国</button>
+      <span class="hint" id="map-hint">30个城市 · 点击标记看故事 · 任意处探索</span>
+    </div>
+    <div class="map-and-panel">
+      <div id="leaflet-map"></div>
+      <div id="loc-panel-area"></div>
+    </div>
+  </div>
+  <!-- Non-map tabs -->
+  <div id="content" class="content-area" style="display:none"></div>
+</div>
+<div class="modal-overlay hidden" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ═══════════════════════════════════════════════
+   中国城市数据（30个）
+═══════════════════════════════════════════════ */
+const CHINA=[
+ {id:'beijing',name:'北京',lat:39.9,lon:116.4,emoji:'🏛️',tagline:'六百年帝都，胡同里的烟火气',
+  story:'北京的一天从胡同里的豆汁声开始。老人们在结冰的湖面打太极，街边有修钢笔的师傅，有画脸谱的艺人。故宫的猫住在朱红色宫墙里，不在乎任何人。从四合院到摩天楼，这座城市把一千年压缩在同一条街上。',
+  wonders:['故宫与四季更迭','胡同早点摊','长城上的风','798艺术区'],tags:['历史','文化','城市']},
+ {id:'shanghai',name:'上海',lat:31.2,lon:121.5,emoji:'🌆',tagline:'东方与西方在这里握手',
+  story:'外滩对岸的浦东，三十年前还是农田，现在是摩天楼。一栋老洋房里可能住着十户人家，说五种方言。黄浦江每天带走潮水，也带来来自世界各地的船。这座城市从不睡觉。',
+  wonders:['外滩夜景','弄堂石库门','苏州河涂鸦','周边水乡'],tags:['城市','建筑','现代']},
+ {id:'chengdu',name:'成都',lat:30.7,lon:104.1,emoji:'🐼',tagline:'熊猫和火锅，慢下来的城市',
+  story:'成都人发明了"悠闲"这个词的生活版本。茶馆里的人一坐就是一个下午，打麻将、晒太阳。大熊猫在竹林里打滚，不在乎任何日程。',
+  wonders:['熊猫繁育基地','宽窄巷子茶馆','青城山古道','夜晚火锅街'],tags:['自然','动物','生活']},
+ {id:'chongqing',name:'重庆',lat:29.6,lon:106.5,emoji:'🌃',tagline:'山城雾都，长江与嘉陵江在此汇合',
+  story:'重庆是世界上最大的山城之一，楼房随着山坡的起伏而盖，有些楼房的一楼是别人的二十楼。两条大江在朝天门交汇，夜晚从山上往下看，万家灯火像撒落的星星。',
+  wonders:['朝天门码头','洪崖洞夜景','磁器口古镇','长江索道'],tags:['城市','山地','夜景']},
+ {id:'xian',name:'西安',lat:34.3,lon:108.9,emoji:'⚔️',tagline:'地下沉睡的帝国，城墙上的自行车',
+  story:'西安的地下埋着太多秘密。兵马俑是农民打井时发现的——八千个真人大小的陶俑，每张脸都不同，在地下等了两千年。城墙至今完整，可以骑自行车绕城一圈。',
+  wonders:['秦始皇兵马俑','古城墙骑行','回民街美食','大雁塔'],tags:['历史','考古','文化']},
+ {id:'wuhan',name:'武汉',lat:30.6,lon:114.3,emoji:'🌸',tagline:'九省通衢，黄鹤楼上俯瞰两江',
+  story:'武汉是"九省通衢"，中国最重要的交通枢纽之一。每年三月，武汉大学的樱花开放，吸引数十万人前来。黄鹤楼是中国四大名楼之首，站在上面可以俯瞰整个武汉三镇。',
+  wonders:['黄鹤楼','武大樱花','武汉长江大桥','东湖磨山'],tags:['历史','自然','城市']},
+ {id:'nanjing',name:'南京',lat:32.1,lon:118.8,emoji:'🏰',tagline:'六朝古都，秦淮河两岸的千年风华',
+  story:'南京是中国古都之中最让人感到历史重量的城市之一。明城墙绵延三十五公里，是世界上最长的古代城墙。秦淮河夜市从唐朝延续至今，乌衣巷里住过王谢两大家族。',
+  wonders:['明孝陵','秦淮河夜游','夫子庙','中山陵'],tags:['历史','文化','城市']},
+ {id:'hangzhou',name:'杭州',lat:30.3,lon:120.2,emoji:'🌿',tagline:'上有天堂，下有苏杭',
+  story:'西湖的美是历代诗人用尽了形容词也没写完的。苏东坡在这里修了苏堤，白居易在这里修了白堤，他们用诗歌和石头把西湖的样子固定下来。秋天的龙井茶，冬天的腊八粥，这座城市每一个季节都有仪式感。',
+  wonders:['西湖十景','龙井茶园','乌镇夜晚','良渚古城遗址'],tags:['自然','文化','茶道']},
+ {id:'suzhou',name:'苏州',lat:31.3,lon:120.6,emoji:'🎋',tagline:'园林之城，江南最精致的角落',
+  story:'苏州的古典园林是中国园林艺术的巅峰——几亩地里装下了山水天地。园丁用假山、水池、廊道、植物营造出无限延展的意境。苏州评弹的声音从老茶馆里飘出，混着太湖的水气。',
+  wonders:['拙政园','虎丘斜塔','周庄古镇','苏州刺绣博物馆'],tags:['园林','文化','艺术']},
+ {id:'guangzhou',name:'广州',lat:23.1,lon:113.3,emoji:'🐉',tagline:'千年商都，早茶的故乡',
+  story:'广州是中国最早对外开放的港口之一，两千年来一直是海上丝绸之路的起点。广州人一天可以喝三次茶——早茶、午茶、下午茶，每次都是一个家庭聚会的理由。',
+  wonders:['陈家祠','珠江夜游','北京路步行街','长洲古岛'],tags:['历史','饮食','商业']},
+ {id:'shenzhen',name:'深圳',lat:22.5,lon:114.1,emoji:'🏙️',tagline:'四十年从渔村到科技之都',
+  story:'四十年前，深圳还是一个小渔村。改革开放后，这里成了中国最大的实验场。腾讯、华为、大疆都从这里起步。深圳今天的天际线像是一本关于中国速度的教科书。',
+  wonders:['OCT华侨城艺术区','深南大道','东部华侨城山水实景','南澳海岛'],tags:['现代','科技','创业']},
+ {id:'qingdao',name:'青岛',lat:36.1,lon:120.4,emoji:'🌊',tagline:'红瓦绿树，海风里有渔人的秘密',
+  story:'青岛的海风有一种咸腥的鲜味。清晨五点，渔船回港，鱼市上有人专门给不知名的鱼取名字——有些鱼生活在一百米深的水下，从未见过阳光。',
+  wonders:['崂山道观','海鲜市场清晨','德式老建筑群','栈桥海边'],tags:['海洋','自然','历史']},
+ {id:'lhasa',name:'拉萨',lat:29.7,lon:91.1,emoji:'⛩️',tagline:'离太阳最近的城市，布达拉宫在云上',
+  story:'拉萨的天蓝到一种不像真实的程度。布达拉宫建在山上，脚下是磕长头朝圣的藏族人，他们从几千公里外走来，只为见一面。高原的空气薄而干净，让每一口呼吸都变得郑重。',
+  wonders:['布达拉宫','八廓街朝圣者','色拉寺辩经','纳木错星空'],tags:['文化','宗教','高原']},
+ {id:'linzhi',name:'林芝',lat:29.7,lon:94.4,emoji:'🌸',tagline:'西藏的江南，桃花盛开时是另一个世界',
+  story:'林芝是西藏海拔最低的地方，因此气候温和，植被茂盛，被称为"西藏的江南"。每年三月，雅鲁藏布江大峡谷两岸的野生桃花盛开，粉红色的花海与雪山交相辉映，是世界上最美的春天之一。',
+  wonders:['雅鲁藏布大峡谷','南伊沟原始森林','鲁朗林海','米堆冰川'],tags:['自然','花卉','高原']},
+ {id:'harbin',name:'哈尔滨',lat:45.8,lon:126.5,emoji:'❄️',tagline:'零下三十度的冰雕王国',
+  story:'哈尔滨的冬天，呼出的气立刻结成白雾。工人们用电锯把松花江的冰切成砖块，建造一整座可以发光的冰城。街上售卖的冻饺子硬得像石头，咬下去嘎嘣响。',
+  wonders:['冰雪大世界','中央大街俄式建筑','雪乡雾凇','东北虎林园'],tags:['冰雪','城市','自然']},
+ {id:'dunhuang',name:'敦煌',lat:40.1,lon:94.7,emoji:'🏺',tagline:'沙漠深处的一千年壁画',
+  story:'敦煌藏在沙漠里，但一千年前是世界最繁忙的路口——丝绸之路在此交汇。莫高窟里藏着古人想象的天堂模样，壁画里飞天的裙摆在风中飘了一千年。',
+  wonders:['莫高窟壁画','鸣沙山月牙泉','汉长城遗址','夜晚星空'],tags:['历史','艺术','沙漠']},
+ {id:'lijiang',name:'丽江',lat:26.9,lon:100.2,emoji:'🏔️',tagline:'纳西古乐与玉龙雪山共存',
+  story:'丽江古城里的水来自玉龙雪山，清澈可以直接饮用。纳西族用"东巴文"记录故事，这是世界上还在活用的最古老象形文字之一。古城的猫住在屋顶上，懒得理人。',
+  wonders:['玉龙雪山冰川','束河古镇','东巴文字','泸沽湖摩梭文化'],tags:['民族','自然','文化']},
+ {id:'jiuzhaigou',name:'九寨沟',lat:33.3,lon:103.9,emoji:'💧',tagline:'童话世界，湖水是蓝宝石的颜色',
+  story:'九寨沟的水是一种不可思议的颜色——蓝绿色，清澈到可以看见十几米深的水底。这里有一百零八个湖泊，每个湖的颜色都略有不同，据说是因为水底的矿物质和藻类不一样。',
+  wonders:['五花海','诺日朗瀑布','镜海倒影','芦苇海栈道'],tags:['自然','湖泊','风景']},
+ {id:'daocheng',name:'稻城亚丁',lat:29.1,lon:100.3,emoji:'⛰️',tagline:'最后的香格里拉，人间最接近天堂的地方',
+  story:'稻城亚丁是一个关于朝圣的地方。三座神山——仙乃日、央迈勇、夏诺多吉，像三位守护者矗立在云端。秋天的牧场是金色和红色的，远处的冰川在阳光下闪光。这里海拔五千多米，每一步都要慢慢走。',
+  wonders:['三神山转山','牛奶海珍珠湖','洛绒牛场秋色','色达寺庙'],tags:['高原','圣地','徒步']},
+ {id:'urumqi',name:'乌鲁木齐',lat:43.8,lon:87.6,emoji:'🐪',tagline:'离海洋最远的城市，三十种语言的集市',
+  story:'乌鲁木齐是世界上离海洋最远的城市。大巴扎的集市里有三十种语言同时飘动，来自整个中亚的商人在此聚集。天山的雪水让这片沙漠长出了世界最甜的哈密瓜。',
+  wonders:['天山天池','国际大巴扎','吐鲁番葡萄沟','塔克拉玛干边缘'],tags:['民族','沙漠','丝路']},
+ {id:'xiamen',name:'厦门',lat:24.5,lon:118.1,emoji:'🎵',tagline:'钢琴之岛，温柔的海与老建筑',
+  story:'鼓浪屿岛上禁止汽车，只有脚步声和海浪声。这座小岛曾住过各国领事，留下四十多种风格的建筑。岛上很多人家有钢琴，夜里会听到有人弹肖邦，混着海风一起飘来。',
+  wonders:['鼓浪屿建筑群','曾厝垵渔村','南普陀寺','胡里山炮台'],tags:['海洋','音乐','历史']},
+ {id:'sanya',name:'三亚',lat:18.3,lon:109.5,emoji:'🏖️',tagline:'中国最南的海，浅绿渐变到深蓝',
+  story:'三亚的海水从岸边的浅绿渐变到深蓝，能见度好时可以看到十几米深的珊瑚。这里生活着"疍家人"——他们的祖先世世代代住在船上，以海为家，不曾上岸定居。',
+  wonders:['珊瑚礁潜水','天涯海角日落','南山大佛','疍家渔村'],tags:['海洋','自然','热带']},
+ {id:'kunming',name:'昆明',lat:25.0,lon:102.7,emoji:'🌺',tagline:'春城四季如春，百花盛开的地方',
+  story:'昆明一年四季气温如春，是中国最宜居的城市之一。云南是中国少数民族最多的省份，彝族、傣族、纳西族等二十六个民族在这里共同生活，每个民族都有独特的服饰、音乐和节日。',
+  wonders:['石林奇观','大理古城','滇池候鸟','翠湖公园'],tags:['民族','自然','气候']},
+ {id:'changsha',name:'长沙',lat:28.2,lon:112.9,emoji:'🌶️',tagline:'娱乐之都，每天有全国最多的人在这里找乐子',
+  story:'长沙是中国年轻人最喜欢的城市之一。芒果TV、湖南卫视都在这里，把中国的娱乐工业带到世界。但长沙也有深厚的历史——岳麓书院是千年学府，从这里走出了毛泽东等无数改变中国的人物。',
+  wonders:['岳麓书院','橘子洲头','长沙超文化街区','湘西凤凰古城'],tags:['文化','娱乐','历史']},
+ {id:'guiyang',name:'贵阳',lat:26.6,lon:106.7,emoji:'🌧️',tagline:'爽爽的贵阳，黄果树瀑布的故乡',
+  story:'贵阳夏天的平均气温只有二十四度，是中国最凉爽的省会城市，被称为"避暑之都"。黄果树瀑布是亚洲最大的瀑布，水雾能飘散到数百米之外。苗族的银饰工艺在贵州保存得最为完整。',
+  wonders:['黄果树大瀑布','西江苗寨','梵净山金顶','镇远古镇'],tags:['自然','民族','气候']},
+ {id:'hohhot',name:'呼和浩特',lat:40.8,lon:111.8,emoji:'🐑',tagline:'草原的门户，蒙古族文化之都',
+  story:'呼和浩特是内蒙古的首府，也是蒙古族文化保存最完整的地方之一。从这里往北，是一望无际的大草原，牧民们驾着摩托车放牧，马头琴的声音在夜晚飘荡。每年七月的那达慕节，摔跤、赛马、射箭是最隆重的比赛。',
+  wonders:['锡林郭勒大草原','那达慕节','成吉思汗陵','响沙湾沙漠'],tags:['草原','民族','牧业']},
+ {id:'tianjin',name:'天津',lat:39.1,lon:117.2,emoji:'🎭',tagline:'相声发源地，五大道的洋楼风情',
+  story:'天津是中国北方最重要的沿海城市，也是中国相声的故乡。马三立、侯宝林都是天津人。五大道保存着三百多幢不同风格的洋楼，走在其中像是穿越了二十世纪初的欧洲。',
+  wonders:['五大道洋楼群','古文化街','小洋楼街区','塘沽海边'],tags:['历史','建筑','艺术']},
+ {id:'tengchong',name:'腾冲',lat:25.0,lon:98.5,emoji:'🌋',tagline:'火山与温泉共存，云南的边疆秘境',
+  story:'腾冲是中国少有的活火山地区，地下的热能孕育了无数温泉。这里距缅甸边境只有几十公里，翡翠集市上可以看到整块整块的原石。和顺古镇的居民在几百年前从中原迁来，把读书的传统保留至今。',
+  wonders:['热海沸泉','火山地质公园','和顺古镇','翡翠集市'],tags:['火山','边疆','温泉']},
+ {id:'xining',name:'西宁',lat:36.6,lon:101.8,emoji:'🏔️',tagline:'进藏的门户，青海湖的守望者',
+  story:'西宁是青藏高原东部的门户城市，海拔两千三百米，这里是很多人进入西藏前的适应地。从西宁出发两小时，就能看到中国最大的内陆湖——青海湖，湖水在阳光下是梦幻的蓝色。',
+  wonders:['青海湖骑行','塔尔寺','茶卡盐湖（天空之镜）','可可西里野生动物'],tags:['高原','湖泊','宗教']},
+ {id:'yinchuan',name:'银川',lat:38.5,lon:106.3,emoji:'🏯',tagline:'西夏王朝的故都，黄河与沙漠交汇',
+  story:'银川是西夏王朝的首都，这个神秘的王朝存在了两百年后被蒙古大军所灭，留下了山坡上一排排陵墓。从银川往西走，腾格里沙漠和黄河只隔几公里，金色的沙丘和黄色的河流并排出现，是令人惊叹的自然景观。',
+  wonders:['西夏王陵','腾格里沙漠骑骆驼','黄河鸟岛','沙湖'],tags:['历史','沙漠','黄河']}
+];
+
+/* ═══════════════════════════════════════════════
+   世界各国数据（42个）
+═══════════════════════════════════════════════ */
+const WORLD=[
+ /* 亚洲 */
+ {id:'japan',name:'日本',lat:35.7,lon:139.7,emoji:'⛩️',tagline:'四季分明的礼仪之国，樱花与枯山水',
+  story:'日本把"把一件事做到极致"变成了一种文化。有些寿司师傅只做金枪鱼，坚持了三十年。新干线能精确到秒，街道干净到可以打赌不会看到垃圾。富士山在冬天白雪皑皑，三月的东京被粉色的樱花淹没。',
+  wonders:['富士山与新干线','京都金阁寺','秋叶原动漫街','北海道雪祭'],tags:['文化','精工','自然']},
+ {id:'korea',name:'韩国',lat:37.6,lon:126.9,emoji:'🎎',tagline:'K-pop的故乡，传统与流行并存的国度',
+  story:'首尔是一个把五百年历史的宫殿和最新的流行文化放在同一条街上的城市。景福宫宏伟壮观，旁边是咖啡厅和偶像练习生宿舍。韩国用二十年时间把本国文化变成了全球现象。',
+  wonders:['景福宫','济州岛火山','韩国美食街','南山首尔塔'],tags:['文化','现代','饮食']},
+ {id:'mongolia',name:'蒙古国',lat:47.9,lon:107.0,emoji:'🐎',tagline:'成吉思汗的故乡，最后的游牧天堂',
+  story:'蒙古国是世界上人口密度最低的国家之一，平均每平方公里只有两个人。大部分国土是草原和戈壁沙漠。牧民们生活在蒙古包里，跟着季节迁徙，这种生活方式已经延续了数千年。夜晚的天空繁星密布，几乎没有光污染。',
+  wonders:['戈壁沙漠骆驼行','那达慕节','蒙古包住宿','成吉思汗雕像'],tags:['游牧','草原','探险']},
+ {id:'india',name:'印度',lat:28.6,lon:77.2,emoji:'🕌',tagline:'文明的发源地，混沌与神圣并存',
+  story:'印度是世界上最古老的文明之一，现在也是世界上人口最多的国家。泰姬陵是世界上最美的建筑之一，是一位皇帝为悼念爱妻而建。恒河对印度教徒来说是圣河，每天有数百万人在河边沐浴祈祷。印度的咖喱有一百种做法。',
+  wonders:['泰姬陵','恒河瓦拉纳西','拉贾斯坦沙漠','喀拉拉邦水乡'],tags:['文明','宗教','多元']},
+ {id:'nepal',name:'尼泊尔',lat:27.7,lon:85.3,emoji:'🏔️',tagline:'世界屋脊的入口，珠穆朗玛的故乡',
+  story:'尼泊尔拥有世界上八千米以上的高峰中的八座，珠穆朗玛峰就在这里。加德满都谷地是联合国教科文组织认定的世界遗产，古老的寺庙和宫殿随处可见。夏尔巴人是世界上最优秀的山地向导，他们天生就能在高海拔地区如鱼得水。',
+  wonders:['珠峰大本营徒步','博大那大佛塔','博卡拉湖畔','杜巴广场'],tags:['登山','宗教','自然']},
+ {id:'thailand',name:'泰国',lat:13.8,lon:100.5,emoji:'🐘',tagline:'微笑的国度，热带丛林与碧蓝海水',
+  story:'泰国的国宝是大象，它们是这里最重要的历史伙伴。曼谷有着世界上最繁忙的水上交通，摩托艇穿梭于运河之间。清迈的寺庙在傍晚被橙色的光芒染成金色。泰国街头的水果摊上摆着二十种你叫不出名字的水果。',
+  wonders:['清迈水灯节','皮皮岛海水','大城历史遗址','清莱白庙'],tags:['文化','热带','美食']},
+ {id:'vietnam',name:'越南',lat:21.0,lon:105.8,emoji:'🍜',tagline:'千里河山，法式殖民地建筑与稻田梯田',
+  story:'越南是一个细长的国家，从北到南有一千六百公里，气候和风景截然不同。河内的老城区有一千年历史，街上摩托车成千上万。下龙湾是海上漂浮的山丘，如梦如幻。越南的河粉（Pho）是世界上最治愈的食物之一。',
+  wonders:['下龙湾','会安古城','沙坝梯田','美山遗址'],tags:['自然','历史','美食']},
+ {id:'indonesia',name:'印度尼西亚',lat:-6.2,lon:106.8,emoji:'🏝️',tagline:'一万七千个岛屿的国家，海洋与火山',
+  story:'印度尼西亚是世界上岛屿最多的国家——一万七千个岛屿散落在赤道两侧。巴厘岛是世界最知名的度假胜地之一，有梯田、寺庙、冲浪浪点。科莫多岛上生活着地球上最大的蜥蜴——科莫多龙，可以长达三米。',
+  wonders:['巴厘岛梯田与寺庙','科莫多巨蜥','婆罗浮屠佛塔','拉贾安帕特珊瑚'],tags:['岛屿','海洋','火山']},
+ {id:'kazakhstan',name:'哈萨克斯坦',lat:51.2,lon:71.4,emoji:'🦅',tagline:'世界最大的内陆国，草原上的鹰猎文化',
+  story:'哈萨克斯坦是世界上面积最大的内陆国家，比西欧各国面积总和还大。这里是古代丝绸之路的重要通道，哈萨克族人的鹰猎文化已有四千年历史。阿拉木图的天山山脉终年积雪，山顶上可以滑雪。',
+  wonders:['阿拉套国家公园','鹰猎节','科尔科巴古堆','咸海遗址'],tags:['草原','游牧','丝路']},
+ {id:'turkey',name:'土耳其',lat:41.0,lon:28.9,emoji:'🌙',tagline:'东西方文明的十字路口',
+  story:'土耳其是世界上唯一横跨欧亚两洲的国家。伊斯坦布尔的蓝色清真寺有六座宣礼塔，圣索菲亚大教堂曾经是基督教教堂，后来变成清真寺，现在又变成了博物馆。卡帕多西亚的洞穴民居和热气球是世界上最超现实的景观之一。',
+  wonders:['卡帕多西亚热气球','蓝色清真寺','棉花堡温泉梯田','以弗所古城'],tags:['文化','历史','地理']},
+ {id:'israel',name:'以色列',lat:31.8,lon:35.2,emoji:'🕍',tagline:'三大宗教的圣地，历史与现实交织的土地',
+  story:'耶路撒冷是基督教、伊斯兰教和犹太教共同的圣城，是世界上宗教意义最密集的地方。哭墙是犹太人两千年流亡后的精神支柱，每天有无数人来这里祈祷。死海是地球上盐度最高的湖泊，人可以不会游泳也能浮在水面上。',
+  wonders:['耶路撒冷老城','死海漂浮','马萨达要塞','特拉维夫海滩'],tags:['宗教','历史','文化']},
+ {id:'saudi',name:'沙特阿拉伯',lat:24.7,lon:46.7,emoji:'🌴',tagline:'石油与沙漠，阿拉伯文化的心脏',
+  story:'麦加是伊斯兰教最神圣的城市，每年有两百多万穆斯林前来朝圣，是世界上规模最大的人口流动之一。沙特的鲁卜哈利沙漠是地球上最大的连续沙漠，面积相当于法国和德国加起来。近年来，沙特正在大力发展旅游业，古城阿尔奥拉的红色砂岩峡谷令人叹为观止。',
+  wonders:['阿尔奥拉红色峡谷','麦地那古城','内夫得沙漠','红海潜水'],tags:['宗教','沙漠','石油']},
+ /* 欧洲 */
+ {id:'france',name:'法国',lat:48.9,lon:2.3,emoji:'🗼',tagline:'艺术与美食的圣殿，欧洲文明的骄傲',
+  story:'法国人对美食的严肃程度令全世界叹服。一家餐厅可以为了一道菜的酱汁钻研三十年。卢浮宫里有三十五万件藏品，蒙娜丽莎每天要面对三万名游客。普罗旺斯的薰衣草田在七月开放，整个南法变成紫色的海洋。',
+  wonders:['埃菲尔铁塔','卢浮宫','普罗旺斯薰衣草','勃艮第葡萄园'],tags:['艺术','美食','葡萄酒']},
+ {id:'uk',name:'英国',lat:51.5,lon:-0.1,emoji:'🎭',tagline:'莎士比亚的故乡，现代民主的发源地',
+  story:'英国是一个把古老传统和现代文明结合得最好的国家之一。白金汉宫的换岗仪式已经进行了数百年，地铁Tube是世界上最古老的地铁系统。苏格兰高地的古堡在雾中若隐若现，威士忌在橡木桶里沉睡多年等待被打开。',
+  wonders:['大本钟与议会大厦','苏格兰高地','巨石阵','哈利·波特取景地'],tags:['历史','文化','文学']},
+ {id:'germany',name:'德国',lat:52.5,lon:13.4,emoji:'🍺',tagline:'工程师的国度，黑森林与巴伐利亚城堡',
+  story:'德国人对精确性和质量的执着举世闻名。奔驰、宝马、西门子都是德国品牌。新天鹅堡是迪士尼城堡的原型，矗立在巴伐利亚的山顶上，像一个童话。德国的圣诞市场有八百年历史，整个十二月都飘着肉桂和热红酒的香味。',
+  wonders:['新天鹅堡','科隆大教堂','黑森林远足','慕尼黑啤酒节'],tags:['工业','历史','自然']},
+ {id:'italy',name:'意大利',lat:41.9,lon:12.5,emoji:'🎨',tagline:'文艺复兴的摇篮，每块石头都有故事',
+  story:'意大利是一个户外博物馆，随便走进一条街都可能遇到几百年前的教堂和雕像。米开朗基罗的大卫像、达芬奇的《最后的晚餐》、拉斐尔的壁画都在这里。威尼斯建在一百一十八个小岛上，出门就是运河，没有汽车。意大利面有三百多种形状，每种形状都有它的理由。',
+  wonders:['罗马斗兽场','威尼斯贡多拉','佛罗伦萨乌菲兹美术馆','阿玛尔菲海岸'],tags:['艺术','历史','美食']},
+ {id:'spain',name:'西班牙',lat:40.4,lon:-3.7,emoji:'🎸',tagline:'弗拉门戈与斗牛，激情之国',
+  story:'西班牙是热情的——弗拉门戈舞蹈用脚踩出史诗，托马斯·庞贝节每年把数万人埋在番茄里。高迪的圣家族大教堂已经建了一百多年还没完工，因为工程太过精细复杂。圣地亚哥朝圣之路吸引了世界各地的人跋涉八百公里。',
+  wonders:['圣家族大教堂','弗拉门戈表演','圣地亚哥朝圣之路','格拉纳达阿尔罕布拉宫'],tags:['艺术','文化','宗教']},
+ {id:'italy_greece',name:'希腊',lat:37.9,lon:23.7,emoji:'🏛️',tagline:'西方文明的摇篮，白色小屋与蓝色海洋',
+  story:'雅典卫城两千四百年来一直矗立在山顶上，见证了西方民主的诞生。希腊哲学家苏格拉底、柏拉图、亚里士多德在这里提出了影响人类思想至今的问题。圣托里尼的蓝顶白墙在爱琴海上闪闪发光，是世界上最被拍摄的风景之一。',
+  wonders:['雅典卫城','圣托里尼日落','米科诺斯','奥林匹克遗址'],tags:['文明','历史','海岛']},
+ {id:'norway',name:'挪威',lat:59.9,lon:10.7,emoji:'🌊',tagline:'峡湾王国，极光与仲夏白夜',
+  story:'挪威的峡湾是冰川雕刻出的自然奇迹，深达几百米，两岸是垂直的山壁。冬天可以在这里看到北极光，夏天的午夜阳光不会落下。挪威人均幸福指数和人均阅读量都位居世界前列，这里的人极其热爱户外活动。',
+  wonders:['盖朗厄尔峡湾','特罗姆瑟极光','卑尔根彩色木屋','挪威弗洛姆铁路'],tags:['自然','峡湾','极光']},
+ {id:'iceland',name:'冰岛',lat:64.1,lon:-22.0,emoji:'🌋',tagline:'冰川与火山共存，人均读书最多的国家',
+  story:'冰岛三分之一国土是熔岩荒地，也有欧洲最大的冰川。这里人均读书量世界第一，每十个人里有一个出过书。地热能量让全国暖气几乎免费，街道下铺着热管防止结冰。冬天可以看到极光，夏天可以在午夜打高尔夫。',
+  wonders:['蓝湖地热温泉','极光追逐','火山口探索','冰川徒步'],tags:['自然','地质','极地']},
+ {id:'russia',name:'俄罗斯',lat:55.7,lon:37.6,emoji:'🏔️',tagline:'世界最大的国家，西伯利亚的壮阔与神秘',
+  story:'俄罗斯横跨十一个时区，从波罗的海到太平洋，是世界上面积最大的国家。贝加尔湖是世界上最深的淡水湖，储存了地球五分之一的淡水。西伯利亚的冬天可以达到零下六十度。莫斯科红场上的圣瓦西里主教座堂像一个彩色的洋葱头，是俄罗斯最标志性的建筑。',
+  wonders:['红场与圣瓦西里教堂','贝加尔湖','西伯利亚铁路','冬宫博物馆'],tags:['文化','历史','探险']},
+ {id:'czech',name:'捷克',lat:50.1,lon:14.4,emoji:'🏰',tagline:'童话里走出来的城市，布拉格百座塔',
+  story:'布拉格被称为"百塔之城"，中世纪的建筑保存得异常完好，像是时间在这里停止了。布拉格城堡是世界上最大的城堡建筑群之一。捷克是世界上人均啤酒消费量最大的国家，每个村子都有自己的酿酒厂和配方。',
+  wonders:['布拉格老城广场','布拉格城堡','查理大桥','克鲁姆洛夫古城'],tags:['历史','建筑','美食']},
+ {id:'switzerland',name:'瑞士',lat:46.9,lon:7.4,emoji:'⛷️',tagline:'阿尔卑斯山的明珠，中立与精准的国度',
+  story:'瑞士阿尔卑斯山的景色是欧洲最壮观的之一，少女峰终年积雪。这里有世界上最贵的手表和最好的巧克力，一块手表的制作可能需要三百道工序。瑞士是世界上最长时间保持和平中立的国家之一，因此成为无数国际组织的总部。',
+  wonders:['少女峰缆车','因特拉肯','日内瓦湖畔','策马特小镇'],tags:['山脉','精工','自然']},
+ /* 非洲 */
+ {id:'egypt',name:'埃及',lat:30.1,lon:31.2,emoji:'🏺',tagline:'法老的国度，金字塔屹立四千年',
+  story:'吉萨金字塔是地球上唯一保存完好的世界七大奇迹。四千五百年前，埃及人用两百三十万块石头堆成了胡夫金字塔，平均每块重两吨半——而且没有现代机械。尼罗河是埃及的生命线，文明的种子在它的滋养下生长了六千年。',
+  wonders:['吉萨金字塔','卢克索神庙','阿布辛贝神殿','红海潜水'],tags:['文明','古迹','沙漠']},
+ {id:'morocco',name:'摩洛哥',lat:34.0,lon:-6.8,emoji:'🌺',tagline:'撒哈拉边缘的神秘国度，蓝色城市与香料市场',
+  story:'摩洛哥是北非最具魅力的国家之一。马拉喀什的集市广场是世界上最混乱也最有活力的地方，蛇舞者、说书人、香料商贩同时出现。舍夫沙万小城被漆成蓝白色，走在里面像是进入了蓝色的梦境。骑骆驼穿越撒哈拉沙漠是很多人一生中最难忘的体验。',
+  wonders:['马拉喀什集市广场','舍夫沙万蓝色小城','撒哈拉沙漠骆驼','菲斯古城迷宫'],tags:['文化','沙漠','集市']},
+ {id:'kenya',name:'肯尼亚',lat:-1.3,lon:36.8,emoji:'🦒',tagline:'野生动物的天堂，角马大迁徙的故乡',
+  story:'每年七月到九月，两百万只角马从坦桑尼亚的塞伦盖蒂越过马赛马拉河，这是地球上规模最大的动物迁徙。长颈鹿的心脏有成年人那么大，才能把血泵到两米高的脑袋。马赛族战士用跳高来展示力量，他们的传统服饰是鲜红色的。',
+  wonders:['马赛马拉大迁徙','乞力马扎罗山','蒙巴萨海岸','马赛族文化村'],tags:['动物','自然','文化']},
+ {id:'southafrica',name:'南非',lat:-25.7,lon:28.2,emoji:'🦁',tagline:'世界的终点，好望角与非洲最南端',
+  story:'南非是世界上生物多样性最丰富的国家之一——有超过两万种植物和一万种动物。克鲁格国家公园是非洲最大的野生动物园，"五大兽"（狮子、豹、大象、水牛、犀牛）都能在这里看到。好望角是连接大西洋和印度洋的地方，两种洋流在这里相遇。',
+  wonders:['克鲁格公园五大兽','好望角','桌山缆车','罗本岛'],tags:['自然','动物','历史']},
+ {id:'ethiopia',name:'埃塞俄比亚',lat:9.0,lon:38.7,emoji:'☕',tagline:'咖啡的故乡，最古老的基督教国度',
+  story:'咖啡起源于埃塞俄比亚，当地有一个传说：一个牧羊人发现他的羊吃了某种浆果后特别兴奋，这就是咖啡的开端。埃塞俄比亚是世界上最古老的独立国家之一，拥有五千年有文字记载的历史。拉利贝拉的岩石教堂是从整块岩石中凿出来的，被认为是世界第八大奇迹。',
+  wonders:['拉利贝拉岩石教堂','咖啡仪式','贡德尔城堡','达纳基勒火山地貌'],tags:['文明','宗教','咖啡']},
+ {id:'tanzania',name:'坦桑尼亚',lat:-6.2,lon:35.7,emoji:'🦓',tagline:'塞伦盖蒂大草原，乞力马扎罗山顶的雪',
+  story:'坦桑尼亚拥有非洲大陆最高峰乞力马扎罗山（海拔五八九五米），山顶常年覆盖冰雪，但气候变化正在让这片雪消失。塞伦盖蒂是世界上最著名的野生动物保护区，每年有约三百万动物在这里生活。桑给巴尔岛的香料贸易从阿拉伯人时代就开始了。',
+  wonders:['乞力马扎罗攀登','塞伦盖蒂狮群','桑给巴尔香料岛','恩戈罗恩戈罗火山口'],tags:['自然','动物','登山']},
+ /* 美洲 */
+ {id:'usa',name:'美国',lat:38.9,lon:-77.0,emoji:'🗽',tagline:'移民国家，多元文化与自然奇观',
+  story:'美国是一个由移民建立的国家，不同文化在这里融合形成了独特的美国文化。大峡谷是科罗拉多河用六百万年雕刻出的地球伤疤，深达一千八百米。黄石公园是地球上最大的超级火山的顶部，地热能量让这里有无数间歇泉和温泉。',
+  wonders:['大峡谷','黄石公园间歇泉','纽约中央公园','夏威夷火山'],tags:['自然','多元','现代']},
+ {id:'canada',name:'加拿大',lat:45.4,lon:-75.7,emoji:'🍁',tagline:'枫叶国度，落基山脉与极光天堂',
+  story:'加拿大是世界上面积第二大的国家，拥有世界上最多的湖泊——占全球淡水湖总数的60%。班夫国家公园的路易丝湖在九月变成绿松石色，倒映着白雪皑皑的山峰。育空地区的极光是北半球最清晰最壮观的之一。',
+  wonders:['班夫路易斯湖','极光（育空）','尼亚加拉大瀑布','魁北克冬季嘉年华'],tags:['自然','湖泊','极光']},
+ {id:'mexico',name:'墨西哥',lat:19.4,lon:-99.1,emoji:'🌮',tagline:'玛雅文明的摇篮，色彩斑斓的活人节',
+  story:'墨西哥是美洲文明最重要的发源地之一，玛雅人和阿兹特克人在这里建立了复杂的城市文明。亡灵节是墨西哥最重要的节日，人们用鲜花、蜡烛和食物欢迎去世的祖先回家。墨西哥的辣椒种类有一百多种，辣度跨越几十个等级。',
+  wonders:['奇琴伊察玛雅遗址','瓦哈卡亡灵节','科巴金字塔攀登','蓝色龙舌兰产区'],tags:['文明','文化','美食']},
+ {id:'brazil',name:'巴西',lat:-15.8,lon:-47.9,emoji:'⚽',tagline:'桑巴与足球，亚马逊雨林的家园',
+  story:'巴西拥有世界上最大的热带雨林——亚马逊，产生了地球上25%的氧气。里约热内卢的基督山上，高三十八米的基督雕像张开双臂，俯瞰整个城市。巴西的狂欢节是世界上规模最大的节日，三百万人在街头跳桑巴舞。',
+  wonders:['亚马逊河流探险','里约热内卢基督山','伊瓜苏大瀑布','潘塔纳尔湿地'],tags:['自然','文化','生物']},
+ {id:'argentina',name:'阿根廷',lat:-34.6,lon:-58.4,emoji:'💃',tagline:'探戈的故乡，巴塔哥尼亚的荒野',
+  story:'探戈起源于布宜诺斯艾利斯的贫民窟，后来征服了整个世界。巴塔哥尼亚是地球上最后的荒野之一，菲茨罗伊山的冰川和湖泊是徒步爱好者的圣地。阿根廷人均消耗牛肉量是世界第一，一个阿根廷人一年吃的牛肉相当于一头牛。',
+  wonders:['伊瓜苏大瀑布（阿方）','巴塔哥尼亚菲茨罗伊山','布宜诺斯艾利斯探戈','蓝色冰川徒步'],tags:['自然','文化','美食']},
+ {id:'peru',name:'秘鲁',lat:-12.0,lon:-77.0,emoji:'🦙',tagline:'印加帝国的遗迹，马丘比丘云端之城',
+  story:'马丘比丘是世界上最令人惊叹的古代城市遗址之一，建于海拔两千四百米的山顶，西班牙人从未发现过它，因此保存完好。亚马逊河的源头在秘鲁安第斯山脉。羊驼（Alpaca）是安第斯山原住民的神圣动物，其毛比绵羊毛柔软三倍。',
+  wonders:['马丘比丘','的的喀喀湖芦苇岛','纳斯卡线条','亚马逊雨林入口'],tags:['文明','自然','高原']},
+ {id:'cuba',name:'古巴',lat:23.1,lon:-82.4,emoji:'🎵',tagline:'时间停止的岛国，雪茄与萨尔萨音乐',
+  story:'古巴像是时间停止在二十世纪五十年代的地方。街上行驶的是几十年前的美国老爷车，五彩斑斓，发出欢快的引擎声。哈瓦那老城区的建筑在落日的橙光下显得格外迷人。萨尔萨音乐从每一扇打开的窗户飘出，古巴雪茄是世界上最著名的。',
+  wonders:['哈瓦那老城区老爷车','特立尼达古城','维尼亚莱斯山谷','古巴雪茄工厂'],tags:['历史','音乐','文化']},
+ /* 大洋洲 */
+ {id:'australia',name:'澳大利亚',lat:-35.3,lon:149.1,emoji:'🦘',tagline:'倒置的大陆，独一无二的动植物',
+  story:'澳大利亚是世界上最古老的大陆，有世界上最奇特的动物：袋鼠、考拉、鸭嘴兽……这些动物在其他任何地方都找不到。大堡礁是从太空就能看见的活体生物，由数十亿珊瑚虫构成。乌鲁鲁（艾尔斯岩）是一块高三百四十八米的单体巨岩，对原住民来说是神圣之地。',
+  wonders:['大堡礁潜水','乌鲁鲁（艾尔斯岩）','悉尼歌剧院','蓝山国家公园'],tags:['自然','动物','海洋']},
+ {id:'newzealand',name:'新西兰',lat:-41.3,lon:174.8,emoji:'🏔️',tagline:'《指环王》的拍摄地，人与自然完美共处',
+  story:'新西兰是彼得·杰克逊选择拍摄《指环王》的地方，因为这里的自然风光如此完美，像是从想象中走出来的。这里的羊比人口多七倍。毛利人是新西兰的原住民，他们的哈卡战舞后来被全世界所知。',
+  wonders:['霍比特村','峡湾国家公园米尔福德','罗托鲁瓦地热','汤加里罗火山远足'],tags:['自然','电影','文化']},
+ {id:'fiji',name:'斐济',lat:-18.0,lon:178.0,emoji:'🌺',tagline:'南太平洋的珍珠，地球上最幸福的地方之一',
+  story:'斐济人以微笑著称，多项研究显示斐济是世界上幸福感最高的国家之一。这里有三百三十多个岛屿，每个岛都有不同的颜色——翡翠色的丛林、白色的沙滩、蓝宝石色的海洋。斐济的珊瑚礁是世界上保存最完好的之一，被称为"珊瑚礁的软珊瑚首都"。',
+  wonders:['珊瑚礁浮潜','传统村落拜访','日落帆船','雨林瀑布'],tags:['海岛','海洋','幸福']},
+ /* 极地 */
+ {id:'arctic_svalbard',name:'北极地区',lat:78.0,lon:16.0,emoji:'❄️',tagline:'极光与北极熊，地球的顶点',
+  story:'挪威斯瓦尔巴群岛是人类能够合法定居的最北端地区。这里的北极熊数量比人还多，出门需要带枪防熊。冬天极夜长达四个月，但极光会把天空染成绿色和紫色。夏天极昼二十四小时都是白天，午夜的太阳毫不疲倦地照耀着冰川。',
+  wonders:['北极光','北极熊','冰川徒步','极昼午夜太阳'],tags:['极地','自然','探险']},
+ {id:'antarctica',name:'南极洲',lat:-80.0,lon:0.0,emoji:'🐧',tagline:'地球上最后的荒野，企鹅的王国',
+  story:'南极洲是地球上最冷、最干、最高的大陆。这里没有国家，只有科学考察站。帝企鹅在零下六十度的冬天孵蛋，雄企鹅把蛋放在脚上，靠肚子的热量孵化，不吃不喝守护两个月。南极洲的冰盖储存了地球上70%的淡水。',
+  wonders:['企鹅群落观察','冰山探险','科考站参观','南极光'],tags:['极地','动物','科学']}
+];
+
+/* ═══════════════════════════════════════════════
+   区域识别（用于任意点击探索）
+═══════════════════════════════════════════════ */
+// [lonMin, latMin, lonMax, latMax]
+const CHINA_REGIONS=[
+ {n:'东北地区',d:'中国最北方的土地，黑土地孕育了中国最重要的粮仓之一。冬天漫长而严寒，但大兴安岭的原始森林和呼伦贝尔大草原壮阔无比。朝鲜族、满族、蒙古族等民族在这里世代共居。',b:[118,40,135,55]},
+ {n:'内蒙古草原',d:'连绵不断的大草原，蒙古包点缀其中。牧民骑摩托车放牧，马头琴声在夜晚飘荡。这里是成吉思汗的故乡，也是中国最大的牧业基地。',b:[97,37,122,55]},
+ {n:'新疆大地',d:'中国面积最大的省区，塔克拉玛干沙漠腹地人迹罕至，天山山脉终年积雪。大巴扎集市里有三十种语言同时飘动，是古代丝绸之路最重要的节点之一。',b:[73,34,97,50]},
+ {n:'西藏高原',d:'世界屋脊，平均海拔超过四千五百米。布达拉宫建在山上见证了一千年历史，牦牛在雪线上漫步，朝圣者从千里之外磕头而来。每一口空气都值得珍惜。',b:[78,26,100,36]},
+ {n:'青海高原',d:'三江源地区——长江、黄河、澜沧江都从这里发源。茶卡盐湖被称为"天空之镜"，青海湖是中国最大的内陆湖，每年有候鸟在这里停留。',b:[89,31,103,40]},
+ {n:'甘肃走廊',d:'古代河西走廊，丝绸之路的咽喉要道。敦煌的莫高窟藏着数百个洞窟的壁画，张掖的丹霞地貌五彩斑斓，嘉峪关是明长城最西端的关口。',b:[92,32,110,42]},
+ {n:'黄土高原',d:'黄河中游的黄土地，延安的窑洞见证了历史，壶口瀑布是黄河最壮观的一段。这片土地养育了中华文明最古老的部分，是华夏文明的根。',b:[105,33,114,40]},
+ {n:'华北平原',d:'中国文明最核心的地带，北京、天津在这里生长了几百年。太行山脉像屏障守护着平原，燕山山脉连接着长城，春天的麦田一望无际。',b:[112,34,122,42]},
+ {n:'华东沿海',d:'中国最发达的地区，上海、南京、杭州、苏州在这里密集分布。长江三角洲是世界上人口最密集的地区之一，江南的温润气候孕育了精致的文化。',b:[116,28,123,35]},
+ {n:'四川盆地',d:'四面被高山围绕，气候温和，物产丰富，是中国最宜居的地区之一。成都的悠闲生活方式令全国羡慕，九寨沟的湖水蓝绿通透，蜀道虽难，却孕育了独特的文化。',b:[97,26,109,34]},
+ {n:'云贵高原',d:'中国少数民族最集中的地区，二十六个民族在这里各自保留着独特的语言和习俗。石林的奇石，梯田的层次，贵州的苗族银饰——每一处都像是一幅画。',b:[97,20,110,29]},
+ {n:'两广地区',d:'南岭以南，热带和亚热带气候让这里全年绿意盎然。珠三角是中国改革开放的前沿，广州的美食举国闻名，桂林的喀斯特峰林是中国最知名的自然景观之一。',b:[104,20,118,27]},
+ {n:'华中地区',d:'长江中游，九省通衢。武汉的黄鹤楼俯瞰两江汇合，张家界的石柱山峰启发了《阿凡达》，洞庭湖是中国第二大淡水湖。',b:[108,26,118,34]},
+ {n:'海南岛',d:'中国唯一的热带岛屿省份，全年阳光灿烂，椰林遍地。亚龙湾的沙滩是中国最细最白的，热带雨林里有珍稀的黎族文化，海底的珊瑚礁色彩斑斓。',b:[108,17,111,21]},
+ {n:'山东半岛',d:'孔子的故乡，泰山是历代帝王封禅之地，登顶可以俯瞰中原大地。青岛的海鲜和德式建筑，烟台的苹果，威海的渔港，构成了一幅丰富的半岛画卷。',b:[114,34,123,38]}
+];
+
+const WORLD_REGIONS=[
+ {n:'日本列岛',d:'四个主要岛屿构成的岛国，文化精致而独特。四季分明——春天樱花，夏天祭典，秋天红叶，冬天滑雪。有三分之一的人口居住在东京都市圈。',b:[127,29,146,46]},
+ {n:'朝鲜半岛',d:'古代被称为"三韩之地"，韩国和朝鲜分据南北。K-pop和韩剧从这里传遍全球，古代的儒家文化在现代生活中依然可见。',b:[124,33,131,39]},
+ {n:'东南亚',d:'热带季风气候，全年温暖多雨。这里是香料之路的中心，曾经吸引了全球商人蜂拥而至。多个文明——印度教、佛教、伊斯兰教在这里交汇融合。',b:[92,0,142,28]},
+ {n:'南亚次大陆',d:'喜马拉雅山脉是这片大陆的北部屏障，印度河和恒河孕育了人类最古老的文明之一。这里有世界上人口最密集的区域，语言多达数百种。',b:[60,5,100,38]},
+ {n:'中亚草原',d:'古代丝绸之路的核心地带，撒马尔罕和布哈拉曾是世界上最重要的贸易城市。大草原一望无际，游牧民族的传统在这里得以延续。',b:[50,35,88,56]},
+ {n:'中东地区',d:'三大宗教——伊斯兰教、基督教、犹太教的发源地，也是人类文明最早出现的地方之一。幼发拉底河和底格里斯河之间，诞生了美索不达米亚文明。',b:[25,10,65,42]},
+ {n:'北非',d:'撒哈拉沙漠占据了这片土地的大部分，但尼罗河带来的生命之水孕育了埃及文明。地中海沿岸的城市既保留了阿拉伯传统，也有欧洲的影响。',b:[-18,15,42,38]},
+ {n:'东非高原',d:'人类的发源地，露西（最古老的人类祖先之一）就在这里被发现。塞伦盖蒂大草原上有地球上规模最大的野生动物群，乞力马扎罗山顶的雪是非洲之巅。',b:[25,-15,50,15]},
+ {n:'南非地区',d:'非洲大陆的南端，好望角是大西洋和印度洋的分界线。这里有非洲最丰富的生物多样性，"五大兽"在国家公园里自由驰骋。',b:[15,-40,40,-20]},
+ {n:'西非',d:'古代马里帝国、桑海帝国等强大王国曾经统治这片土地。现代西非是非洲文化最丰富的地区之一，这里的音乐影响了全球的流行音乐，包括爵士乐和蓝调。',b:[-20,-5,20,20]},
+ {n:'西欧',d:'现代民主、科学革命、文艺复兴的发源地。古罗马帝国的遗迹散落各处，中世纪的城堡守护着山头，现代都市高楼林立。这里是世界上博物馆最密集的地区。',b:[-10,35,25,58]},
+ {n:'北欧',d:'斯堪的纳维亚半岛的峡湾、冰岛的火山、芬兰的极光，构成了北欧独特的自然景观。这里的国家常年位居全球幸福感排名榜首，北欧人极其热爱户外活动。',b:[-28,55,35,72]},
+ {n:'东欧',d:'斯拉夫文化圈，拥有世界上最壮观的宫殿和城堡。俄罗斯的冬宫、波兰的克拉科夫老城、布拉格的百塔之城，都是欧洲历史最浓厚的地方之一。',b:[15,44,60,72]},
+ {n:'北美大陆',d:'美洲大陆的北半部分，多元文化的大熔炉。美国大峡谷和加拿大落基山脉是世界上最壮观的自然奇迹之一，墨西哥的玛雅文明留下了令人叹为观止的古迹。',b:[-170,14,-50,84]},
+ {n:'加勒比海地区',d:'热带岛屿散落在加勒比海上，每个岛都有独特的文化和历史。这里曾是殖民时代的贸易中心，蔗糖、烟草、咖啡从这里运往世界各地。音乐（雷鬼、萨尔萨）从这里征服了全球。',b:[-90,10,-60,25]},
+ {n:'南美洲',d:'亚马逊雨林覆盖了大陆中部，是地球之肺。安第斯山脉纵贯西部，印加文明在这里留下了马丘比丘等神秘遗迹。南部的巴塔哥尼亚是地球上最后的荒野。',b:[-82,-58,-33,13]},
+ {n:'大洋洲',d:'这片广阔的太平洋区域包含了数千个岛屿。澳大利亚大陆拥有独一无二的动物，原住民文化超过六万年历史。珊瑚礁是这片区域最珍贵的生态系统。',b:[110,-50,180,-5]},
+ {n:'北极圈地区',d:'极光在天空中跳舞，午夜太阳在夏天永不落下，冬天极夜漫长。北极熊是这里的王者，因纽特人用几千年积累的智慧在这片冰雪大地上生存。',b:[-180,66,180,90]},
+ {n:'南极洲',d:'地球上最冷、最干、最高、最偏远的大陆。这里没有国家，没有政府，只有科学家和企鹅。冰盖储存了地球70%的淡水，如果全部融化，全球海平面将上升约六十米。',b:[-180,-90,180,-65]},
+ {n:'太平洋',d:'太平洋覆盖了地球表面积的三分之一，比所有大陆面积加起来还大。深处有马里亚纳海沟——地球最深处，深达11034米，那里有我们尚未探索的生命形式。',b:[-180,-60,180,60]}
+];
+
+/* ═══════════════════════════════════════════════
+   职业数据（20个）
+═══════════════════════════════════════════════ */
+const CAREERS=[
+ {id:'marine',title:'海洋生物学家',emoji:'🐙',tagline:'给从未见过的生物取名字',tags:['海洋','生物','自然','科学'],ifYouLike:'你喜欢在河边翻石头找小虫、喜欢观察动物、喜欢待在水里',day:'今天我穿着潜水服下到水下五十米，任务是给一种新发现的发光深海鱼做记录。上周我们确认它是一个新物种——今天我要给它取名字，这个名字会永远留在科学文献里。下午回到船上，想着这条鱼在完全没有光的深处，孤独地活了多少万年。'},
+ {id:'wildlife',title:'野生动物摄影师',emoji:'📷',tagline:'在丛林里等一张照片可以等一周',tags:['自然','动物','探索','艺术'],ifYouLike:'你喜欢在山里观察动物、喜欢等待和安静、喜欢把看到的东西记录下来',day:'我在肯尼亚草原的帐篷里住了七天，等待一头猎豹。今天它终于出现在地平线——我的手开始抖。拍了三百张，只有两张是好的。晚上发现相机卡里有只不认识的鸟，可能是新记录。靴子里进了一只蜥蜴。'},
+ {id:'game',title:'游戏设计师',emoji:'🎮',tagline:'设计让玩家哭出来的那个故事',tags:['创造','故事','数字','艺术'],ifYouLike:'你喜欢玩游戏并思考"这里为什么这么设计"、喜欢讲故事、喜欢拼乐高',day:'今天我们讨论：当玩家杀死游戏里第一个敌人时，应该有愧疚感吗？这个讨论开了四个小时。游戏设计其实是在设计人的感受——恐惧、兴奋、心碎、成就感。下午我在纸上画了一百种地图形状，只为找到一个让玩家迷路时依然觉得有趣的设计。'},
+ {id:'perfumer',title:'调香师',emoji:'🌸',tagline:'用气味装一瓶下雨前的空气',tags:['艺术','创造','自然','感知'],ifYouLike:'你喜欢闻东西的味道、喜欢描述感觉、对化学或艺术感兴趣',day:'今天的任务是"重现1920年代巴黎一家旧书店的气味"——旧纸、灰尘、木头、一点皮革。我的鼻子能分辨六千多种气味，但现在只有三种原料能组合出这个感觉。调香就像写诗，不同的字放在一起，意思完全变了。'},
+ {id:'paleo',title:'古生物学家',emoji:'🦕',tagline:'从一块骨头还原一亿年前的世界',tags:['历史','科学','自然','探索'],ifYouLike:'你喜欢挖土、对恐龙或化石感兴趣、有耐心、喜欢像侦探一样解谜',day:'我们在内蒙古挖了三周，今天终于找到一块完整的恐龙肋骨化石。我用小刷子一毫米一毫米地清理了六个小时。这块骨头属于一只一亿两千万年前死去的恐龙。从某种意义上说，今天我握过一只恐龙的骨头。'},
+ {id:'sound',title:'声音设计师',emoji:'🎧',tagline:'电影里的雷声可能是用铁板做的',tags:['音乐','创造','故事','艺术'],ifYouLike:'你喜欢音乐、喜欢玩创意、喜欢发现"这个声音是怎么做出来的"',day:'今天我要给电影里的外星人设计声音。外星人不存在，没有参考——我用杯子蘸水摩擦边缘、把蝉声录音降速、叠加大提琴泛音。外星人的"说话声"就是这三种声音混合的。电影里每一个声音背后都有这样的故事。'},
+ {id:'space',title:'太空工程师',emoji:'🚀',tagline:'设计能飞出太阳系的机器',tags:['科学','数字','建造','探索'],ifYouLike:'你喜欢数学和物理、喜欢思考宇宙、喜欢解决从未有人解决过的问题',day:'旅行者一号1977年发射，现在已飞出太阳系，距地球230亿公里，还在发回信号。我的团队今天研究新型推进系统。核心问题：如何让一台机器在没有维修的情况下运行一千年。'},
+ {id:'uwarch',title:'水下考古学家',emoji:'⚓',tagline:'在海底挖掘沉没的古代城市',tags:['历史','海洋','探索','科学'],ifYouLike:'你喜欢游泳和潜水、喜欢历史、喜欢像侦探一样发现线索',day:'今天我们在地中海水下三十米发现了一艘两千年前的罗马商船，船舱里有几百个完整的陶罐。我在水下只能停留四十五分钟，然后必须上来。这艘船在那里等了两千年，不在乎再等一天。'},
+ {id:'eagle',title:'驯鹰师',emoji:'🦅',tagline:'中亚草原传承千年的古老技艺',tags:['自然','动物','文化','探索'],ifYouLike:'你喜欢动物、喜欢户外生活、对游牧民族文化感兴趣',day:'我的鹰叫萨尔苏克，跟了我七年。今天早上四点出门，气温零下二十五度。萨尔苏克突然冲向一只狐狸——俯冲、出击，一切在三秒内完成。驯鹰师和鹰之间不是主仆，更像是两个猎人的伙伴。'},
+ {id:'climate',title:'气候科学家',emoji:'🌡️',tagline:'读懂十五万年前冰芯里藏着的天气',tags:['科学','自然','数字','探索'],ifYouLike:'你喜欢科学、关心地球的未来、喜欢用数据理解大事情',day:'今天收到了从南极运来的冰芯样本——这段冰在十五万年前形成，气泡里封存了当时的大气成分。我用细针刺破气泡，分析里面的空气。那一刻，我握着一口来自史前的空气。'},
+ {id:'ethno',title:'民族志研究者',emoji:'📖',tagline:'和一个部落住一年，记录他们的生活方式',tags:['文化','故事','民族','探索'],ifYouLike:'你喜欢了解不同的人和文化、喜欢学语言、好奇别人是怎么生活的',day:'我在亚马逊雨林住了八个月，学会了一种只有三百人说的语言。这种语言里没有"昨天"和"明天"，只有"之前"和"之后"。今天村里的孩子教我用叶子折一种小船，我录了下来——这可能是这项技艺留下的唯一记录。'},
+ {id:'acoustic',title:'建筑声学工程师',emoji:'🎼',tagline:'设计音乐厅，让声音在里面跳舞',tags:['音乐','建造','数字','艺术'],ifYouLike:'你喜欢音乐、喜欢数学或物理、对建筑感兴趣',day:'今天在上海交响乐团音乐厅做测试——向空气里发射一声气球爆破，用五十个麦克风记录声音反弹消散的轨迹。这座音乐厅混响时间是2.1秒，刚好是大提琴最好听的范围。我的工作是让建筑和音乐相爱。'},
+ {id:'drone',title:'无人机驾驶员',emoji:'🚁',tagline:'用镜头飞越人类走不到的地方',tags:['科技','探索','航空','摄影'],ifYouLike:'你喜欢飞行和遥控器、喜欢从高处看世界、动手能力强',day:'今天我要给四川大峡谷做地形测绘——无人机需要在风速每秒七米的峡谷里飞行。飞行三小时后，我得到了一份完整的三维地形模型，精度到厘米级。这份数据将帮助工程师选择修建桥梁的位置。站在悬崖边操控无人机，我看到了人类的脚永远踩不到的地方。'},
+ {id:'ai',title:'人工智能工程师',emoji:'🤖',tagline:'教机器学会看见和理解世界',tags:['科技','数字','创造','数学'],ifYouLike:'你喜欢数学、喜欢解谜、对计算机和机器人非常好奇',day:'今天我在训练一个模型，让它学会认出方言——四川话、粤语、闽南语。数据集里有十万条录音，来自不同年龄、不同口音的人。机器在反复犯错、反复纠正。就像教一个孩子说话，但这个孩子可以同时学一百种语言。'},
+ {id:'carbon',title:'碳排放管理员',emoji:'🌱',tagline:'帮地球计算它的"碳账本"',tags:['环境','科学','数字','未来'],ifYouLike:'你关心地球变暖的问题、喜欢数字和统计分析、想解决大问题',day:'今天我去一家钢铁厂做碳核查——逐一检查每台炉子、每辆运输车、每度电的排放来源。一张表格背后是整个地球的温度账单。我意识到，每一吨减少的碳排放，都是对未来的一点偿还。'},
+ {id:'robot',title:'机器人工程师',emoji:'🦾',tagline:'让机器长出手脚，学会移动世界',tags:['科技','创造','数字','建造'],ifYouLike:'你喜欢拆装玩具、喜欢乐高和积木、好奇机器怎么运动',day:'今天我们测试一款新的机械臂，它的任务是给早产婴儿做手术——动作精度必须在0.1毫米以内。机械臂试验了四十七次后终于成功完成了整套动作。我不是医生，但我设计的机器可能会救人。这种感觉很难描述。'},
+ {id:'garden',title:'城市园艺师',emoji:'🌿',tagline:'在钢筋水泥里种出一片绿洲',tags:['自然','创造','城市','生活'],ifYouLike:'你喜欢植物和花草、喜欢动手种东西、想让城市变得更漂亮',day:'今天我在一栋四十层楼的外墙上设计了一面绿植墙——两千株植物。这面墙建成后，夏天可以帮大楼降温三度，还能吸附附近道路的PM2.5。城市里的每一株植物，都是一台小型空气净化机。'},
+ {id:'heritage',title:'非遗传承人',emoji:'🎭',tagline:'守护即将消失的祖先智慧',tags:['文化','艺术','历史','传承'],ifYouLike:'你喜欢民间手艺和古老技术、觉得老东西有故事、有耐心和细心',day:'今天我用传统技法修复了一幅清代蜀绣——这幅绣品上的针法叫"滚针"，现在全国会做的人不超过二十个。一根丝线要劈成十六份才够细，一平方厘米的绣面要花两个小时。我想，这幅绣品第一次被人看见时，那个绣娘是否知道她的手艺会传承几百年。'},
+ {id:'astro',title:'天体物理学家',emoji:'🌌',tagline:'用数学读懂宇宙说的话',tags:['科学','天文','数字','探索'],ifYouLike:'你喜欢仰望星空、喜欢物理和数学、好奇宇宙是怎么来的',day:'今天我们收到了来自一颗中子星的信号——它距离地球四千光年，也就是说，这个信号在宇宙里旅行了四千年才抵达我们的望远镜。我的工作是分析这个信号里藏着的信息。我们从未到过那里，但我们知道它的一切。'},
+ {id:'curator',title:'数字策展人',emoji:'🖼️',tagline:'让博物馆住进每个人的手机',tags:['艺术','文化','数字','创造'],ifYouLike:'你喜欢参观博物馆、对艺术和历史感兴趣、喜欢用手机记录和分享',day:'今天我把故宫的一幅宋代山水画做成了可以"走进去"的三维体验——用户戴上眼镜就能站在画里，看画中的瀑布流动，听鸟鸣。一幅八百年前的画，今天有一万个人同时走进去参观。我做这件事的原因很简单：博物馆只有一个，但想看的人有几十亿。'}
+];
+
+/* ═══════════════════════════════════════════════
+   全局状态
+═══════════════════════════════════════════════ */
+const S={tab:'map',mapMode:'china',selLocId:null,selCareerId:null,search:'',recFilter:'all',kids:[],records:[]};
+const M={open:false,type:'',refId:'',refName:'',refEmoji:'',tags:[],isGroup:false,selKids:[],note:''};
+const genId=()=>Math.random().toString(36).slice(2,10);
+const el=id=>document.getElementById(id);
+
+/* ═══════════════════════════════════════════════
+   地图（Leaflet卫星地图）
+═══════════════════════════════════════════════ */
+let map=null;
+let markerGroup=null;
+
+function initMap(){
+  if(map){map.invalidateSize();return;}
+  map=L.map('leaflet-map',{
+    center:[35,105],zoom:4,
+    zoomControl:true,
+    attributionControl:true,
+    maxBounds:[[-90,-200],[90,200]],
+    maxBoundsViscosity:0.8
+  });
+  /* 卫星底图（ESRI World Imagery，无需API Key） */
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri',
+    maxZoom:18
+  }).addTo(map);
+  markerGroup=L.layerGroup().addTo(map);
+  /* 缩放/平移时隐藏探索弹窗 */
+  map.on('movestart',hideExpPopup);
+  map.on('zoomstart',hideExpPopup);
+  /* 点击地图任意处探索 */
+  map.on('click',e=>handleMapClick(e));
+  addMarkers();
+}
+
+function addMarkers(){
+  if(!markerGroup)return;
+  markerGroup.clearLayers();
+  const locs=S.mapMode==='china'?CHINA:WORLD;
+  locs.forEach(loc=>{
+    const isSel=S.selLocId===loc.id;
+    const icon=L.divIcon({
+      html:`<div class="map-pin${isSel?' sel':''}" data-id="${loc.id}">
+        <div class="pin-circle">${loc.emoji}</div>
+        <div class="pin-name">${loc.name}</div>
+      </div>`,
+      className:'',iconSize:[0,0],iconAnchor:[0,0]
+    });
+    const m=L.marker([loc.lat,loc.lon],{icon,interactive:true});
+    m.on('click',e=>{
+      L.DomEvent.stopPropagation(e);
+      selectLoc(loc.id);
+    });
+    markerGroup.addLayer(m);
+  });
+}
+
+function selectLoc(id){
+  S.selLocId=id;
+  hideExpPopup();
+  addMarkers();
+  renderLocPanel();
+}
+
+function switchMode(m){
+  S.mapMode=m;S.selLocId=null;
+  el('mb-china').classList.toggle('act',m==='china');
+  el('mb-world').classList.toggle('act',m==='world');
+  el('loc-panel-area').innerHTML='';
+  const count=m==='china'?CHINA.length:WORLD.length;
+  const label=m==='china'?`${count}个城市`:`${count}个国家`;
+  el('map-hint').textContent=`${label} · 点击标记看故事 · 任意处探索`;
+  if(m==='china'){map.flyTo([35,105],4,{duration:1});}
+  else{map.flyTo([20,10],2,{duration:1});}
+  addMarkers();
+  hideExpPopup();
+}
+
+/* 任意位置点击 */
+function handleMapClick(e){
+  const lat=e.latlng.lat,lng=e.latlng.lng;
+  const {x,y}=e.containerPoint;
+  hideExpPopup();
+  /* 检测区域 */
+  const regs=S.mapMode==='china'?CHINA_REGIONS:WORLD_REGIONS;
+  let found=null;
+  for(const r of regs){
+    if(lng>=r.b[0]&&lat>=r.b[1]&&lng<=r.b[2]&&lat<=r.b[3]){found=r;break;}
+  }
+  if(!found)found={n:'浩瀚海洋',d:'海洋覆盖了地球71%的面积，深处有无数我们尚未发现的物种和秘密。马里亚纳海沟深达11034米，比珠穆朗玛峰还高。'};
+  showExpPopup(lat,lng,x,y,found);
+}
+
+/* 探索弹窗 */
+let _expPopupEl=null;
+function showExpPopup(lat,lng,px,py,region){
+  const mapDiv=el('leaflet-map');
+  const rect=mapDiv.getBoundingClientRect();
+  const pw=265,ph=290;
+  let left=px+14,top=py+8;
+  if(left+pw>rect.width-8)left=px-pw-10;
+  if(top+ph>rect.height-8)top=py-ph-10;
+  left=Math.max(8,left);top=Math.max(8,top);
+  
+  /* 图片替换说明：将 .exp-img div 替换为 <img src="图片路径"> 即可显示真实卫星/实景图片 */
+  const div=document.createElement('div');
+  div.className='exp-popup';div.id='exp-popup';
+  div.style.left=left+'px';div.style.top=top+'px';
+  div.innerHTML=`
+  <div class="exp-drag">
+    <div style="font-size:13px;font-weight:600;color:var(--text)">${region.n}</div>
+    <button onclick="hideExpPopup()" class="icon-btn" style="font-size:15px">✕</button>
+  </div>
+  <div class="exp-coords">📍 ${Math.abs(lat).toFixed(2)}°${lat>=0?'N':'S'}, ${Math.abs(lng).toFixed(2)}°${lng>=0?'E':'W'}</div>
+  <div class="exp-img">
+    <span>📸</span>
+    图片占位区<br><small>可替换为真实图片</small>
+  </div>
+  <div style="font-size:12px;color:var(--text2);line-height:1.75">${region.d}</div>`;
+  
+  /* 拖动 */
+  let drag=false,sx,sy,ox,oy;
+  div.querySelector('.exp-drag').addEventListener('mousedown',e=>{
+    drag=true;sx=e.clientX;sy=e.clientY;ox=parseInt(div.style.left);oy=parseInt(div.style.top);
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{if(!drag)return;div.style.left=(ox+e.clientX-sx)+'px';div.style.top=(oy+e.clientY-sy)+'px';});
+  document.addEventListener('mouseup',()=>drag=false);
+  
+  mapDiv.appendChild(div);
+  _expPopupEl=div;
+}
+
+function hideExpPopup(){
+  if(_expPopupEl){_expPopupEl.remove();_expPopupEl=null;}
+}
+
+/* 位置面板 */
+function renderLocPanel(){
+  const area=el('loc-panel-area');if(!area)return;
+  const locs=S.mapMode==='china'?CHINA:WORLD;
+  const loc=locs.find(l=>l.id===S.selLocId);
+  if(!loc){area.innerHTML='';return;}
+  /* 
+   * 【图片替换说明】
+   * 将下方 .img-ph div 替换为：
+   * <img src="images/${loc.id}.jpg" style="width:100%;height:130px;object-fit:cover;border-radius:var(--r);margin-bottom:12px">
+   * 或在 CHINA/WORLD 数据中每条加 image 字段，用 loc.image 引用。
+   */
+  area.innerHTML=`
+  <div class="loc-panel">
+    <div class="lp-head">
+      <div>
+        <div style="font-size:26px">${loc.emoji}</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text);margin-top:5px">${loc.name}</div>
+        ${loc.country?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${loc.country}</div>`:''}
+      </div>
+      <button class="icon-btn" onclick="S.selLocId=null;el('loc-panel-area').innerHTML='';addMarkers()">✕</button>
+    </div>
+    <div class="lp-scroll">
+      <div class="img-ph"><div class="img-ph-icon">📸</div>图片占位区（可替换为真实图片）</div>
+      <div style="font-size:12px;color:var(--accent);font-style:italic;line-height:1.6;margin-bottom:12px">「${loc.tagline}」</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.9;margin-bottom:16px">${loc.story}</div>
+      <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px;margin-bottom:7px">值得探索的事</div>
+      ${loc.wonders.map(w=>`<div class="wonder-row"><span style="color:var(--accent);font-size:11px;flex-shrink:0">→</span>${w}</div>`).join('')}
+      <div style="margin-top:11px;display:flex;flex-wrap:wrap;gap:3px">${(loc.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    </div>
+    <div class="lp-foot">
+      <button class="primary-btn" onclick="openModal('location','${loc.id}')">✦ 记录孩子的兴趣</button>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   职业全书
+═══════════════════════════════════════════════ */
+function renderCareers(c){
+  c.style.cssText='display:flex;flex-direction:column;height:100%;overflow:hidden';
+  if(S.selCareerId){renderCareerDetail(c);return;}
+  c.innerHTML=`
+  <div class="mode-bar">
+    <input id="career-search" value="${S.search}" placeholder="搜索职业、标签、技能方向…" style="flex:1;max-width:360px" oninput="S.search=this.value;updateCareerList()">
+    <span class="hint">${CAREERS.length}个职业</span>
+  </div>
+  <div style="flex:1;overflow-y:auto"><div class="career-grid" id="career-grid"></div></div>`;
+  updateCareerList();
+}
+
+function updateCareerList(){
+  const g=el('career-grid');if(!g)return;
+  const q=S.search.trim();
+  const list=q?CAREERS.filter(c=>c.title.includes(q)||c.tagline.includes(q)||c.ifYouLike.includes(q)||c.tags.some(t=>t.includes(q))):CAREERS;
+  if(!list.length){g.innerHTML='<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div>没有找到匹配的职业</div></div>';return;}
+  g.innerHTML=list.map(c=>`
+  <div class="career-card" onclick="S.selCareerId='${c.id}';render()">
+    <div style="font-size:30px;margin-bottom:9px">${c.emoji}</div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${c.title}</div>
+    <div style="font-size:11px;color:var(--accent);font-style:italic;margin-bottom:9px;line-height:1.4">${c.tagline}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">${c.tags.slice(0,3).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.5">${c.ifYouLike}</div>
+  </div>`).join('');
+}
+
+function renderCareerDetail(c){
+  const car=CAREERS.find(x=>x.id===S.selCareerId);
+  if(!car){S.selCareerId=null;renderCareers(c);return;}
+  c.innerHTML=`
+  <div style="height:100%;overflow-y:auto">
+    <div style="position:sticky;top:0;background:var(--surface);padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;z-index:5">
+      <button onclick="S.selCareerId=null;render()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent);font-weight:500;font-family:inherit">← 返回职业全书</button>
+      <button class="primary-btn" style="width:auto;padding:8px 18px" onclick="openModal('career','${car.id}')">✦ 记录兴趣</button>
+    </div>
+    <div style="max-width:600px;margin:0 auto;padding:24px 20px">
+      <div style="font-size:48px;margin-bottom:12px">${car.emoji}</div>
+      <div style="font-size:23px;font-weight:600;color:var(--text);margin-bottom:5px">${car.title}</div>
+      <div style="font-size:13px;color:var(--accent);font-style:italic;margin-bottom:20px;line-height:1.5">${car.tagline}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px">${car.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      <div style="background:var(--surface);border-radius:var(--rl);padding:18px 20px;border:1px solid var(--border);margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px;margin-bottom:10px">普通工作日 · 第一人称</div>
+        <div style="font-size:13px;color:var(--text2);line-height:2">${car.day}</div>
+      </div>
+      <div style="background:rgba(184,116,40,.07);border-radius:var(--r);padding:14px 16px;border:1px dashed rgba(184,116,40,.25)">
+        <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:5px">如果你……可能会喜欢这个职业</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">${car.ifYouLike}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   兴趣记录
+═══════════════════════════════════════════════ */
+function renderRecords(c){
+  c.style.cssText='display:flex;flex-direction:column;height:100%;overflow:hidden';
+  const sideItems=[
+    {id:'all',label:'全部记录',icon:'📋',count:S.records.length},
+    {id:'group',label:'群体兴趣',icon:'👥',count:S.records.filter(r=>r.isGroup).length},
+    ...S.kids.map(k=>({id:k.id,label:k.name,icon:'👤',count:S.records.filter(r=>r.childIds?.includes(k.id)).length,isKid:true}))
+  ];
+  const visible=S.records.filter(r=>{
+    if(S.recFilter==='all')return true;
+    if(S.recFilter==='group')return r.isGroup;
+    return r.childIds?.includes(S.recFilter);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+
+  c.innerHTML=`
+  <div class="rec-layout">
+    <div class="rec-sidebar">
+      <div style="padding:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:7px;letter-spacing:.5px">孩子名单</div>
+        <div style="display:flex;gap:6px">
+          <input id="kid-input" placeholder="输入姓名…" onkeydown="if(event.key==='Enter')addKid()" style="flex:1;padding:6px 8px;font-size:12px">
+          <button onclick="addKid()" style="padding:6px 10px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:600;flex-shrink:0">+</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px">
+        ${sideItems.map(item=>`
+        <div class="sid-item ${S.recFilter===item.id?'act':''}" onclick="S.recFilter='${item.id}';render()">
+          <span class="sid-label">${item.icon} ${item.label}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="badge">${item.count}</span>
+            ${item.isKid?`<button onclick="event.stopPropagation();removeKid('${item.id}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:1px 3px">✕</button>`:''}
+          </div>
+        </div>`).join('')}
+      </div>
+      <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:6px">
+        <button onclick="doImport()" style="flex:1;padding:7px;border-radius:var(--r);border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;color:var(--text2);font-family:inherit">↑ 导入</button>
+        <button onclick="doExport()" style="flex:1;padding:7px;border-radius:var(--r);border:1px solid rgba(184,116,40,.4);background:rgba(184,116,40,.08);cursor:pointer;font-size:11px;color:var(--accent);font-weight:500;font-family:inherit">↓ 导出</button>
+      </div>
+    </div>
+    <div class="rec-main">
+      ${visible.length===0
+        ?`<div class="empty-state"><div class="empty-icon">📝</div><div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">还没有记录</div><div style="font-size:12px">在地图或职业全书里点击「记录兴趣」</div></div>`
+        :visible.map(r=>{
+          const names=S.kids.filter(k=>r.childIds?.includes(k.id)).map(k=>k.name);
+          return`<div class="rec-card" id="rc-${r.id}">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;min-width:0">
+                <span style="font-size:20px;flex-shrink:0">${r.refEmoji}</span>
+                <div style="min-width:0">
+                  <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.refName}</div>
+                  <div style="font-size:11px;color:var(--text3)">${r.type==='location'?'地图位置':'职业探索'}</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:4px;flex-shrink:0">
+                <div style="text-align:right">
+                  <div style="font-size:11px;color:var(--text3)">${r.date}</div>
+                  <div style="font-size:11px;color:${r.isGroup?'var(--accent2)':'var(--accent)'};font-weight:500;margin-top:1px">${r.isGroup?'👥 群体':'👤 '+(names.join('、')||'未知')}</div>
+                </div>
+                <button class="rec-del-btn" onclick="deleteRecord('${r.id}')" title="删除">🗑</button>
+              </div>
+            </div>
+            ${r.note?`<div style="font-size:12px;color:var(--text2);padding:8px 10px;background:var(--surface2);border-radius:6px;line-height:1.7;margin-bottom:8px">「${r.note}」</div>`:''}
+            <div style="display:flex;flex-wrap:wrap;gap:3px">${(r.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+          </div>`;
+        }).join('')}
+    </div>
+  </div>`;
+}
+
+function addKid(){const inp=el('kid-input');const n=(inp?.value||'').trim();if(!n)return;S.kids.push({id:genId(),name:n});render();}
+function removeKid(id){if(!confirm('确定删除这个孩子的记录？'))return;S.kids=S.kids.filter(k=>k.id!==id);S.records=S.records.filter(r=>!r.childIds?.includes(id));if(S.recFilter===id)S.recFilter='all';render();}
+function deleteRecord(id){
+  if(!confirm('确定删除这条记录？'))return;
+  const card=el('rc-'+id);
+  if(card){card.style.animation='slideOut .2s ease-out forwards';setTimeout(()=>{S.records=S.records.filter(r=>r.id!==id);render();},200);}
+  else{S.records=S.records.filter(r=>r.id!==id);render();}
+}
+
+/* ═══════════════════════════════════════════════
+   模态框（无JSON参数传递，彻底修复bug）
+═══════════════════════════════════════════════ */
+function openModal(type,refId){
+  let item=type==='location'?(S.mapMode==='china'?CHINA:WORLD).find(l=>l.id===refId):CAREERS.find(c=>c.id===refId);
+  if(!item){showToast('数据未找到','error');return;}
+  M.open=true;M.type=type;M.refId=refId;
+  M.refName=item.name||item.title;M.refEmoji=item.emoji;M.tags=item.tags||[];
+  M.isGroup=false;M.selKids=[];M.note='';
+  el('modal-overlay').classList.remove('hidden');
+  renderModalContent();
+}
+function closeModal(){M.open=false;el('modal-overlay').classList.add('hidden');}
+function handleOverlayClick(e){if(e.target===el('modal-overlay'))closeModal();}
+function setModalGroup(v){M.isGroup=v;renderModalContent();}
+function toggleModalKid(id){const i=M.selKids.indexOf(id);if(i>=0)M.selKids.splice(i,1);else M.selKids.push(id);renderModalContent();}
+function goAddKid(){closeModal();switchTab('records');setTimeout(()=>{const inp=el('kid-input');if(inp)inp.focus();},100);}
+
+function renderModalContent(){
+  const box=el('modal-box');if(!box)return;
+  const can=M.isGroup||M.selKids.length>0;
+  box.innerHTML=`
+  <div style="margin-bottom:15px">
+    <div style="font-size:11px;color:var(--text3);letter-spacing:.5px;margin-bottom:3px">📝 记录兴趣发现</div>
+    <div style="font-size:18px;font-weight:600;color:var(--text)">${M.refEmoji} ${M.refName}</div>
+    ${M.tags.length?`<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:3px">${M.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+  </div>
+  <div style="margin-bottom:13px">
+    <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:7px">这次发现属于谁？</div>
+    <div class="opt-row">
+      <button class="opt-btn ${!M.isGroup?'act':''}" onclick="setModalGroup(false)">
+        <div class="opt-btn-title">某个孩子</div><div class="opt-btn-sub">个人兴趣</div>
+      </button>
+      <button class="opt-btn ${M.isGroup?'act':''}" onclick="setModalGroup(true)">
+        <div class="opt-btn-title">全班/多人</div><div class="opt-btn-sub">群体兴趣</div>
+      </button>
+    </div>
+  </div>
+  ${!M.isGroup?`<div style="margin-bottom:13px">
+    <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:7px">选择孩子（可多选）</div>
+    ${S.kids.length===0
+      ?`<div style="padding:14px;background:rgba(184,116,40,.07);border-radius:var(--r);border:1px dashed rgba(184,116,40,.3);text-align:center">
+         <div style="font-size:22px;margin-bottom:5px">👶</div>
+         <div style="font-size:12px;color:var(--text2);margin-bottom:8px">还没有添加孩子名单</div>
+         <button onclick="goAddKid()" style="padding:6px 16px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-family:inherit">去添加孩子 →</button>
+       </div>`
+      :`<div class="chip-wrap">${S.kids.map(k=>`<button class="chip ${M.selKids.includes(k.id)?'sel':''}" onclick="toggleModalKid('${k.id}')">${k.name}</button>`).join('')}</div>`
+    }
+  </div>`:''}
+  <div style="margin-bottom:15px">
+    <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:6px">💭 备注观察（选填）</div>
+    <textarea class="m-textarea" id="modal-note" placeholder="• 孩子看到什么时眼睛亮了？&#10;• 说了什么让你印象深刻的话？&#10;• 问了什么有趣的问题？" oninput="M.note=this.value">${M.note}</textarea>
+  </div>
+  <div class="m-actions">
+    <button class="btn-cancel" onclick="closeModal()">取消</button>
+    <button class="btn-save" id="modal-save-btn" onclick="saveRecord()" ${can?'':'disabled'}>✦ 保存记录</button>
+  </div>`;
+}
+
+function saveRecord(){
+  M.note=el('modal-note')?.value||M.note;
+  const can=M.isGroup||M.selKids.length>0;
+  if(!can){const b=el('modal-save-btn');if(b){b.style.animation='shake .35s';setTimeout(()=>b.style.animation='',380);}return;}
+  S.records.unshift({id:genId(),type:M.type,refId:M.refId,refName:M.refName,refEmoji:M.refEmoji,
+    tags:[...M.tags],isGroup:M.isGroup,childIds:M.isGroup?[]:[...M.selKids],
+    note:M.note.trim(),date:new Date().toISOString().split('T')[0]});
+  closeModal();render();
+  const who=M.isGroup?'全班':M.selKids.map(id=>S.kids.find(k=>k.id===id)?.name).filter(Boolean).join('、')||'孩子';
+  showToast(`已为 ${who} 记录「${M.refName}」的兴趣！`,'success');
+}
+
+/* ═══════════════════════════════════════════════
+   导入/导出
+═══════════════════════════════════════════════ */
+function doExport(){
+  const b=new Blob([JSON.stringify({v:2,kids:S.kids,records:S.records,at:new Date().toISOString()},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download='兴趣记录_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.json';a.click();
+  showToast('数据已导出！','success');
+}
+function doImport(){
+  const i=document.createElement('input');i.type='file';i.accept='.json';
+  i.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.kids)S.kids=d.kids;if(d.records)S.records=d.records;render();showToast('数据已导入！','success');}
+      catch{showToast('文件格式不正确','error');}};r.readAsText(f);};i.click();
+}
+
+/* Toast */
+function showToast(msg,type='success'){
+  const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=(type==='success'?'✓ ':'✕ ')+msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.animation='toastOut .25s ease-out forwards';setTimeout(()=>t.remove(),260);},2200);
+}
+
+/* ═══════════════════════════════════════════════
+   导航 & 渲染
+═══════════════════════════════════════════════ */
+function switchTab(tab){
+  S.tab=tab;S.selLocId=null;S.selCareerId=null;
+  ['map','careers','records'].forEach(x=>el('nb-'+x).classList.toggle('act',x===tab));
+  if(tab==='map'){
+    el('map-container').style.display='flex';el('content').style.display='none';
+    initMap(); // 首次或已存在时调用invalidateSize
+  }else{
+    el('map-container').style.display='none';el('content').style.display='flex';
+    const c=el('content');c.innerHTML='';
+    if(tab==='careers')renderCareers(c);else renderRecords(c);
+  }
+}
+function render(){
+  if(S.tab==='map'){renderLocPanel();}
+  else{const c=el('content');c.innerHTML='';if(S.tab==='careers')renderCareers(c);else renderRecords(c);}
+}
+
+/* 初始化 */
+switchTab('map');
+</script>
+</body>
+</html>

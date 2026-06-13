@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>专注捕星 · Focus Star-Catcher</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #04060f;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #eaf0ff; user-select: none; }
+  #globeViz { position: fixed; inset: 0; }
+
+  /* ---- 准星 ---- */
+  #reticle { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 220px; height: 220px; pointer-events: none; z-index: 5; }
+  #reticle svg { width: 100%; height: 100%; overflow: visible; }
+  .ret-cross { stroke: rgba(180,210,255,0.65); stroke-width: 2; }
+  .ret-ring  { fill: none; stroke: rgba(150,190,255,0.30); stroke-width: 2; }
+  #captureArc { fill: none; stroke: #7ef0c8; stroke-width: 6; stroke-linecap: round;
+    filter: drop-shadow(0 0 8px rgba(126,240,200,0.8)); transition: stroke .2s; }
+  #lockLabel { position: fixed; left: 50%; top: calc(50% + 130px); transform: translateX(-50%);
+    font-size: 13px; letter-spacing: 3px; color: rgba(190,220,255,0.85); z-index: 5;
+    pointer-events: none; text-shadow: 0 0 10px rgba(120,170,255,0.6); }
+
+  /* ---- 顶部 HUD ---- */
+  #hud { position: fixed; top: 0; left: 0; right: 0; padding: 16px 22px; z-index: 10;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    pointer-events: none; }
+  .panel { background: rgba(14,20,40,0.55); border: 1px solid rgba(120,150,230,0.25);
+    border-radius: 14px; padding: 10px 16px; backdrop-filter: blur(8px); }
+  #stats { display: flex; gap: 26px; }
+  .stat .k { font-size: 11px; letter-spacing: 2px; color: rgba(170,190,240,0.7); }
+  .stat .v { font-size: 26px; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums; }
+  #scoreVal { color: #ffe08a; }
+  #timeVal  { color: #9fd4ff; }
+
+  /* ---- 专注力槽 ---- */
+  #focusWrap { width: 230px; }
+  #focusWrap .k { font-size: 11px; letter-spacing: 2px; color: rgba(170,190,240,0.7);
+    display: flex; justify-content: space-between; }
+  #focusTrack { margin-top: 7px; height: 16px; border-radius: 8px;
+    background: rgba(255,255,255,0.08); overflow: hidden; position: relative; }
+  #focusBar { height: 100%; width: 0%;
+    background: linear-gradient(90deg, #4a7bd6, #7ef0c8); border-radius: 8px;
+    transition: width .12s linear; box-shadow: 0 0 14px rgba(126,240,200,0.5); }
+  #focusThresh { position: absolute; top: -2px; bottom: -2px; width: 2px;
+    background: rgba(255,255,255,0.6); }
+
+  /* ---- 右下控制说明 / 模拟 ---- */
+  #ctrl { position: fixed; right: 16px; bottom: 16px; z-index: 10; text-align: right; }
+  #ctrl .hint { font-size: 11px; color: rgba(180,200,240,0.55); line-height: 1.7; }
+  #sim { margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end; align-items:center; }
+  #sim .lbl { font-size: 11px; color: rgba(180,200,240,0.6); margin-right: 4px; }
+  .sim-btn { pointer-events: auto; cursor: pointer; font-size: 11px;
+    border: 1px solid rgba(140,170,240,0.3); background: rgba(20,28,55,0.6);
+    color: rgba(220,230,255,0.85); border-radius: 8px; padding: 4px 9px; }
+  .sim-btn.active { background: rgba(126,240,200,0.22); border-color: rgba(126,240,200,0.7);
+    color: #bdf6e4; }
+  #ws-dot { pointer-events: auto; display: inline-block; width: 22px; height: 22px;
+    line-height: 22px; text-align: center; border-radius: 50%; font-size: 12px;
+    background: rgba(200,160,255,0.15); color: rgba(255,255,255,0.65); margin-left: 6px; }
+
+  /* ---- 居中遮罩（开始 / 结束） ---- */
+  #overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(6,10,26,0.55), rgba(3,5,14,0.9)); }
+  #overlay.hidden { display: none; }
+  #overlay h1 { font-size: 40px; margin: 0 0 6px; letter-spacing: 6px;
+    background: linear-gradient(90deg, #9fd4ff, #7ef0c8); -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; }
+  #overlay p { max-width: 540px; color: rgba(200,215,250,0.8); line-height: 1.9;
+    font-size: 14px; margin: 4px 0; }
+  #overlay .big { font-size: 30px; color: #ffe08a; font-weight: 700; margin: 14px 0 4px; }
+  #startBtn { margin-top: 26px; cursor: pointer; pointer-events: auto;
+    font-size: 17px; letter-spacing: 4px; color: #04101a; font-weight: 700;
+    padding: 13px 44px; border: none; border-radius: 40px;
+    background: linear-gradient(90deg, #9fd4ff, #7ef0c8);
+    box-shadow: 0 8px 30px rgba(126,240,200,0.4); }
+  #startBtn:active { transform: translateY(1px); }
+  #reportBox { margin: 10px 0; min-width: 320px; }
+  .rrow { display: flex; justify-content: space-between; font-size: 15px;
+    padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .rrow span:last-child { font-weight: 700; color: #9fd4ff; font-variant-numeric: tabular-nums; }
+</style>
+
+<script type="importmap">{ "imports": {
+  "react": "https://esm.sh/react@18",
+  "react-dom": "https://esm.sh/react-dom@18/client"
+}}</script>
+</head>
+<body>
+  <div id="globeViz"></div>
+
+  <!-- 准星 + 捕获进度环 -->
+  <div id="reticle">
+    <svg viewBox="0 0 220 220">
+      <circle class="ret-ring" cx="110" cy="110" r="80"></circle>
+      <line class="ret-cross" x1="110" y1="76" x2="110" y2="96"></line>
+      <line class="ret-cross" x1="110" y1="124" x2="110" y2="144"></line>
+      <line class="ret-cross" x1="76" y1="110" x2="96" y2="110"></line>
+      <line class="ret-cross" x1="124" y1="110" x2="144" y2="110"></line>
+      <circle id="captureArc" cx="110" cy="110" r="92"
+        stroke-dasharray="578" stroke-dashoffset="578"
+        transform="rotate(-90 110 110)"></circle>
+    </svg>
+  </div>
+  <div id="lockLabel">扫描中…</div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="panel" id="stats">
+      <div class="stat"><div class="k">已捕获</div><div class="v" id="scoreVal">0</div></div>
+      <div class="stat"><div class="k">剩余时间</div><div class="v" id="timeVal">60</div></div>
+    </div>
+    <div class="panel" id="focusWrap">
+      <div class="k"><span>专注力 FOCUS</span><span id="focusNum">0</span></div>
+      <div id="focusTrack"><div id="focusBar"></div><div id="focusThresh"></div></div>
+    </div>
+  </div>
+
+  <!-- 控制说明 + 模拟面板 -->
+  <div id="ctrl">
+    <div class="hint">转动头部 / 方向键 → 旋转星球瞄准<br/>专注力越高 → 捕获越快</div>
+    <div id="sim">
+      <span class="lbl">模拟专注力</span>
+      <button class="sim-btn active" data-mode="off">关</button>
+      <button class="sim-btn" data-mode="low">低</button>
+      <button class="sim-btn" data-mode="high">高</button>
+      <button class="sim-btn" data-mode="auto">随机</button>
+      <span id="ws-dot" title="数据源状态">⚡</span>
+    </div>
+  </div>
+
+  <!-- 开始 / 结束遮罩 -->
+  <div id="overlay">
+    <h1>专 注 捕 星</h1>
+    <p>转动头部（陀螺仪）旋转地球，把发光的星标对准屏幕中心的准星。<br/>
+       保持<strong>专注</strong> —— 你的专注力为捕获光束充能，越专注捕获越快。</p>
+    <p style="color:rgba(150,170,210,0.7);font-size:12px">无设备时：方向键旋转地球，右下角“模拟专注力”按钮提供专注力。</p>
+    <div id="reportBox"></div>
+    <button id="startBtn">开 始</button>
+  </div>
+
+  <script src="//unpkg.com/@babel/standalone"></script>
+  <script type="text/jsx" data-type="module">
+    import React, { useEffect, useRef } from 'react';
+    import { createRoot } from 'react-dom';
+    import Globe from 'https://esm.sh/react-globe.gl@2?external=react';
+
+    /* ==================== 工具 ==================== */
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rand = (a, b) => a + Math.random() * (b - a);
+    // 球面角距离（度）
+    function angDist(lat1, lng1, lat2, lng2) {
+      const R = Math.PI / 180;
+      const dLat = (lat2 - lat1) * R, dLng = (lng2 - lng1) * R;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * R) * Math.cos(lat2 * R) * Math.sin(dLng / 2) ** 2;
+      return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) / R;
+    }
+
+    /* ==================== 数据源：WebSocket + 模拟 ==================== */
+    const WS_URL = 'ws://localhost:8765';
+    let ws = null, wsConnected = false;
+    let gyroscope_x = 0, gyroscope_y = 270, gyroscope_z = 170, attention_raw = 0;
+    const GYRO_Z_REST = 170;   // 偏航静息（左右转头）
+    const GYRO_Y_REST = 270;   // 俯仰静息（点头/抬头）
+
+    function updateWsDot() {
+      const dot = document.getElementById('ws-dot');
+      if (wsConnected) { dot.textContent = '✓'; dot.style.background = 'rgba(100,220,150,0.2)';
+        dot.style.color = 'rgba(100,220,150,0.9)'; dot.title = '已连接 ' + WS_URL; }
+      else { dot.textContent = '⚡'; dot.style.background = 'rgba(200,160,255,0.15)';
+        dot.style.color = 'rgba(255,255,255,0.65)'; dot.title = '未连接，使用键盘 + 模拟专注力'; }
+    }
+    function initWebSocket() {
+      try {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = () => { wsConnected = true; updateWsDot(); };
+        ws.onmessage = (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            gyroscope_x = d.gyroscope_x || 0;
+            gyroscope_y = (d.gyroscope_y !== undefined) ? d.gyroscope_y : GYRO_Y_REST;
+            gyroscope_z = (d.gyroscope_z !== undefined) ? d.gyroscope_z : GYRO_Z_REST;
+            const a = (d.attention !== undefined && d.attention !== null) ? d.attention : 0;
+            attention_raw = a > 1 ? a : a * 100;
+          } catch (err) {}
+        };
+        ws.onerror = () => {};
+        ws.onclose = () => { wsConnected = false; updateWsDot(); setTimeout(initWebSocket, 5000); };
+      } catch (e) {}
+    }
+    initWebSocket();
+
+    // 模拟专注力（无设备调试）
+    let simMode = 'off', simVal = 50, simTarget = 50, simTimer = 0;
+    document.querySelectorAll('.sim-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        simMode = btn.dataset.mode;
+        document.querySelectorAll('.sim-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.mode === simMode));
+      });
+    });
+    function updateSim(dt) {
+      simTimer += dt;
+      if (simTimer > 0.8) {
+        simTimer = 0;
+        let lo = 0, hi = 100;
+        if (simMode === 'low') { lo = 5; hi = 30; }
+        else if (simMode === 'high') { lo = 55; hi = 95; }
+        simTarget = clamp(simTarget + (Math.random() - 0.5) * (hi - lo) * 0.5, lo, hi);
+      }
+      simVal += (simTarget - simVal) * 0.03;
+    }
+    function currentAttention() {
+      if (wsConnected) return clamp(attention_raw, 0, 100);
+      if (simMode !== 'off') return clamp(simVal, 0, 100);
+      return 0;
+    }
+
+    // 键盘（无设备时旋转地球）
+    const keys = {};
+    addEventListener('keydown', e => { keys[e.code] = true; });
+    addEventListener('keyup', e => { keys[e.code] = false; });
+
+    /* ==================== 游戏参数 ==================== */
+    const GAME_TIME   = 60;     // 秒
+    const ALTITUDE    = 2.1;    // 相机高度
+    const AIM_RADIUS  = 24;     // 命中角度阈值（度）
+    const FOCUS_MIN   = 35;     // 充能起效的最低专注力
+    const CAPTURE_T   = 1.6;    // 满专注 + 完美对准的最快捕获秒数
+    const LNG_GAIN    = 2.2;    // 偏航 → 经度 灵敏度
+    const LAT_GAIN    = 1.6;    // 俯仰 → 纬度 灵敏度
+    const ARC_LEN     = 578;    // 捕获环周长(2πr, r=92)
+
+    /* ==================== 游戏状态 ==================== */
+    const G = {
+      running: false, score: 0, timeLeft: GAME_TIME,
+      povLat: 0, povLng: 0, tgtLat: 0, tgtLng: 0,
+      baseY: null, baseZ: null,           // 陀螺仪基准（首帧标定）
+      charge: 0, active: -1,
+      attnSamples: [], hits: 0, attemptStart: 0,
+      targets: [],                         // {id,lat,lng}
+      setTargets: null, globe: null, nextId: 1,
+    };
+
+    function spawnTarget() {
+      return { id: G.nextId++, lat: rand(-58, 58), lng: rand(-180, 180) };
+    }
+    function refreshTargets() {
+      while (G.targets.length < 5) G.targets.push(spawnTarget());
+      if (G.setTargets) G.setTargets(G.targets.map(t => ({ ...t })));
+    }
+
+    /* ==================== React 组件 ==================== */
+    function App() {
+      const globeEl = useRef();
+      const [targets, setTargets] = React.useState([]);
+
+      useEffect(() => {
+        G.globe = globeEl.current;
+        G.setTargets = setTargets;
+        // 关闭用户拖拽/缩放，完全由陀螺仪/键盘驱动
+        const ctr = globeEl.current.controls();
+        ctr.enabled = false; ctr.autoRotate = false;
+        globeEl.current.pointOfView({ lat: 0, lng: 0, altitude: ALTITUDE }, 0);
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        requestAnimationFrame(loop);
+      }, []);
+
+      const activeId = targets.length && G.active >= 0 && G.targets[G.active]
+        ? G.targets[G.active].id : -1;
+
+      return React.createElement(Globe, {
+        ref: globeEl,
+        globeImageUrl: '//cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg',
+        bumpImageUrl: '//cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png',
+        backgroundImageUrl: '//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png',
+        showAtmosphere: true,
+        atmosphereColor: '#5fa8ff',
+        atmosphereAltitude: 0.22,
+        // 星标点
+        pointsData: targets,
+        pointLat: 'lat', pointLng: 'lng',
+        pointColor: d => d.id === activeId ? '#7ef0c8' : '#ffe08a',
+        pointAltitude: 0.05,
+        pointRadius: d => d.id === activeId ? 0.7 : 0.45,
+        // 脉冲光环
+        ringsData: targets,
+        ringLat: 'lat', ringLng: 'lng',
+        ringColor: d => (t => `rgba(${d.id === activeId ? '126,240,200' : '255,224,138'},${Math.sqrt(1 - t)})`),
+        ringMaxRadius: d => d.id === activeId ? 6 : 3.5,
+        ringPropagationSpeed: 3,
+        ringRepeatPeriod: 900,
+      });
+    }
+
+    /* ==================== 主循环 ==================== */
+    let lastT = performance.now();
+    function loop(now) {
+      const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+      updateSim(dt);
+
+      if (G.running) {
+        // ---- 输入 → 目标 POV ----
+        if (wsConnected) {
+          if (G.baseZ === null) { G.baseZ = gyroscope_z; G.baseY = gyroscope_y; }
+          G.tgtLng = -(gyroscope_z - G.baseZ) * LNG_GAIN;
+          G.tgtLat = clamp((gyroscope_y - G.baseY) * LAT_GAIN, -80, 80);
+        } else {
+          const sp = 70 * dt;
+          if (keys['ArrowLeft']  || keys['KeyA']) G.tgtLng += sp;
+          if (keys['ArrowRight'] || keys['KeyD']) G.tgtLng -= sp;
+          if (keys['ArrowUp']    || keys['KeyW']) G.tgtLat = clamp(G.tgtLat + sp, -80, 80);
+          if (keys['ArrowDown']  || keys['KeyS']) G.tgtLat = clamp(G.tgtLat - sp, -80, 80);
+        }
+        // 平滑跟随
+        G.povLat = lerp(G.povLat, G.tgtLat, 0.18);
+        G.povLng = lerp(G.povLng, G.tgtLng, 0.18);
+        if (G.globe) G.globe.pointOfView({ lat: G.povLat, lng: G.povLng, altitude: ALTITUDE }, 0);
+
+        // ---- 找最接近准星的星标 ----
+        let best = -1, bestD = 1e9;
+        G.targets.forEach((t, i) => {
+          const d = angDist(G.povLat, G.povLng, t.lat, t.lng);
+          if (d < bestD) { bestD = d; best = i; }
+        });
+        G.active = best;
+        const aim = clamp(1 - bestD / AIM_RADIUS, 0, 1);  // 0..1 对准度
+
+        // ---- 专注力充能 ----
+        const attn = currentAttention();
+        G.attnSamples.push(attn);
+        const focusGate = clamp((attn - FOCUS_MIN) / (100 - FOCUS_MIN), 0, 1);
+        if (aim > 0 && focusGate > 0) {
+          G.charge += dt / CAPTURE_T * aim * focusGate;
+        } else {
+          G.charge -= dt * 0.6;   // 失准/分神 → 衰减
+        }
+        G.charge = clamp(G.charge, 0, 1);
+
+        if (G.charge >= 1 && best >= 0) {  // 捕获成功
+          G.score++; G.hits++; G.charge = 0;
+          G.targets.splice(best, 1);
+          G.targets.push(spawnTarget());
+          refreshTargets();
+        }
+
+        // ---- 计时 ----
+        G.timeLeft -= dt;
+        if (G.timeLeft <= 0) { G.timeLeft = 0; endGame(); }
+
+        // ---- HUD ----
+        document.getElementById('scoreVal').textContent = G.score;
+        document.getElementById('timeVal').textContent = Math.ceil(G.timeLeft);
+        document.getElementById('focusNum').textContent = Math.round(attn);
+        document.getElementById('focusBar').style.width = attn + '%';
+        document.getElementById('focusThresh').style.left = FOCUS_MIN + '%';
+        const arc = document.getElementById('captureArc');
+        arc.style.strokeDashoffset = ARC_LEN * (1 - G.charge);
+        arc.style.stroke = aim > 0 && focusGate > 0 ? '#7ef0c8' : 'rgba(255,150,150,0.7)';
+        const lbl = document.getElementById('lockLabel');
+        if (best < 0) lbl.textContent = '扫描中…';
+        else if (aim <= 0) lbl.textContent = '继续旋转 · 让星标进入准星';
+        else if (focusGate <= 0) lbl.textContent = '已对准 · 请提升专注力';
+        else lbl.textContent = '捕获充能中 ' + Math.round(G.charge * 100) + '%';
+      }
+      requestAnimationFrame(loop);
+    }
+
+    /* ==================== 开始 / 结束 ==================== */
+    function startGame() {
+      Object.assign(G, {
+        running: true, score: 0, timeLeft: GAME_TIME, charge: 0, active: -1,
+        povLat: 0, povLng: 0, tgtLat: 0, tgtLng: 0,
+        baseY: null, baseZ: null, attnSamples: [], hits: 0, targets: [],
+      });
+      refreshTargets();
+      document.getElementById('overlay').classList.add('hidden');
+    }
+
+    function endGame() {
+      G.running = false;
+      const avg = G.attnSamples.length
+        ? G.attnSamples.reduce((a, b) => a + b, 0) / G.attnSamples.length : 0;
+      const focusedPct = G.attnSamples.length
+        ? 100 * G.attnSamples.filter(v => v >= FOCUS_MIN).length / G.attnSamples.length : 0;
+      let grade = 'C';
+      const sc = G.score * 6 + avg;
+      if (sc > 110) grade = 'S'; else if (sc > 85) grade = 'A'; else if (sc > 60) grade = 'B';
+
+      document.getElementById('reportBox').innerHTML =
+        '<div class="big">本局评级 ' + grade + '</div>' +
+        '<div class="rrow"><span>捕获星标</span><span>' + G.score + ' 颗</span></div>' +
+        '<div class="rrow"><span>平均专注力</span><span>' + avg.toFixed(0) + '</span></div>' +
+        '<div class="rrow"><span>专注时长占比</span><span>' + focusedPct.toFixed(0) + '%</span></div>';
+      document.querySelector('#overlay h1').textContent = '本 局 报 告';
+      document.querySelector('#overlay p').style.display = 'none';
+      document.getElementById('startBtn').textContent = '再 来 一 局';
+      document.getElementById('overlay').classList.remove('hidden');
+    }
+
+    updateWsDot();
+    createRoot(document.getElementById('globeViz')).render(React.createElement(App));
+  </script>
+</body>
+</html>

@@ -1,0 +1,588 @@
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.app{width:100%;height:680px;display:flex;flex-direction:column;position:relative;overflow:hidden;background:var(--color-background-tertiary);font-family:var(--font-sans)}
+.hdr{height:52px;background:#231410;display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0}
+.hdr-title{color:#F5E6C8;font-size:15px;font-weight:500;letter-spacing:.5px;font-family:var(--font-serif);white-space:nowrap}
+.hdr-spacer{flex:1}
+.nav-btn{padding:5px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.8);cursor:pointer;font-size:12px;font-family:var(--font-sans);transition:all .15s}
+.nav-btn.act{background:#B87020;border-color:#B87020;color:#fff;font-weight:500}
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.mode-bar{height:44px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:.5px solid var(--color-border-tertiary);background:var(--color-background-primary);flex-shrink:0}
+.mode-btn{padding:5px 16px;border-radius:20px;border:1.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:12px;font-family:var(--font-sans)}
+.mode-btn.act{background:#B87020;border-color:#B87020;color:#fff;font-weight:500}
+.map-wrap{flex:1;display:flex;overflow:hidden}
+.map-svg-area{flex:1;overflow:hidden;position:relative}
+.loc-panel{width:310px;border-left:.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-primary);overflow:hidden}
+.lp-head{padding:16px 16px 12px;border-bottom:.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:flex-start}
+.lp-scroll{flex:1;overflow-y:auto;padding:14px 16px}
+.lp-foot{padding:12px 16px;border-top:.5px solid var(--color-border-tertiary)}
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;background:var(--color-background-secondary);color:var(--color-text-secondary);margin:2px}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--color-text-secondary);font-size:16px;padding:3px 5px;line-height:1}
+.primary-btn{width:100%;padding:11px;border-radius:8px;border:none;background:#B87020;color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font-sans)}
+.career-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;padding:16px}
+.career-card{background:var(--color-background-primary);border-radius:var(--border-radius-lg);padding:16px;border:.5px solid var(--color-border-tertiary);cursor:pointer;transition:transform .15s}
+.career-card:hover{transform:translateY(-2px)}
+.rec-layout{display:flex;height:100%;overflow:hidden}
+.rec-sidebar{width:200px;border-right:.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;background:var(--color-background-primary);overflow:hidden}
+.rec-main{flex:1;overflow-y:auto;padding:16px}
+.sid-item{padding:7px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin:1px 6px}
+.sid-item.act{background:rgba(184,112,32,.12)}
+.badge{font-size:10px;background:var(--color-background-secondary);color:var(--color-text-tertiary);padding:1px 6px;border-radius:8px}
+.rec-card{background:var(--color-background-primary);border-radius:var(--border-radius-lg);padding:14px 16px;border:.5px solid var(--color-border-tertiary);margin-bottom:10px}
+.overlay{position:absolute;inset:0;background:rgba(35,20,16,.55);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal{background:var(--color-background-primary);border-radius:var(--border-radius-xl);padding:24px;width:92%;max-width:440px;border:.5px solid var(--color-border-secondary)}
+.chip{padding:5px 14px;border-radius:20px;border:1.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+.chip.sel{background:#B87020;border-color:#B87020;color:#fff}
+.opt-btn{flex:1;padding:10px;border-radius:8px;border:1.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;font-family:var(--font-sans)}
+.opt-btn.act{border-color:#B87020;background:rgba(184,112,32,.1)}
+input,textarea{border:1.5px solid var(--color-border-secondary);border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--font-sans);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:100%}
+textarea{resize:none;height:72px}
+.emp{text-align:center;padding:50px 20px;color:var(--color-text-secondary)}
+/* map popup */
+.map-popup{position:absolute;left:0;top:0;min-width:220px;background:rgba(255,255,255,0.95);backdrop-filter:blur(4px);border-radius:10px;padding:10px;border:1px solid rgba(0,0,0,.06);box-shadow:0 8px 20px rgba(0,0,0,.12);pointer-events:auto;z-index:40;opacity:0;transform:translateY(6px);transition:all .22s cubic-bezier(.2,.9,.26,1)}
+.map-popup.show{opacity:1;transform:translateY(0)}
+.map-popup .bg{position:absolute;inset:0;background:rgba(0,0,0,.3);border-radius:10px;z-index:-1;pointer-events:none}
+.map-popup .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.map-popup .coords{font-size:12px;color:var(--color-text-secondary)}
+
+/* toast */
+.toast-wrap{position:fixed;right:18px;top:18px;z-index:80;display:flex;flex-direction:column;gap:8px}
+.toast{min-width:180px;padding:10px 14px;border-radius:8px;color:#fff;font-weight:500;box-shadow:0 6px 18px rgba(0,0,0,.12);transform:translateX(10px);opacity:0;transition:all .25s}
+.toast.show{opacity:1;transform:translateX(0)}
+.toast.success{background:#2D7A6B}
+.toast.error{background:#B84A3A}
+
+/* animations */
+.shake{animation:shake .45s}
+@keyframes shake{0%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}100%{transform:translateX(0)}}
+</style>
+
+<div class="app" id="app">
+  <div class="hdr">
+    <div class="hdr-title">✦ 世界在这里</div>
+    <div class="hdr-spacer"></div>
+    <button class="nav-btn act" id="nb-map" onclick="switchTab('map')">🗺 世界地图</button>
+    <button class="nav-btn" id="nb-careers" onclick="switchTab('careers')">💼 职业全书</button>
+    <button class="nav-btn" id="nb-records" onclick="switchTab('records')">📋 兴趣记录</button>
+  </div>
+  <div class="content" id="content"></div>
+  <div class="overlay" id="modal-overlay" style="display:none">
+    <div class="modal" id="modal-box"></div>
+  </div>
+  <!-- toast container -->
+  <div class="toast-wrap" id="toast-wrap"></div>
+  <!-- map click popup (positioned by JS) -->
+  <div id="map-popup" class="map-popup" style="display:none;pointer-events:auto"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+const CHINA = [
+  {id:'beijing',name:'北京',lon:116.4,lat:39.9,emoji:'🏛️',region:'华北',tagline:'六百年帝都，胡同里的烟火气',story:'北京的一天从胡同里的豆汁声开始。老人们在结冰的湖面打太极，街边有修钢笔的师傅，有画脸谱的艺人。故宫的猫住在朱红色宫墙里，不在乎任何人。从四合院到摩天楼，这座城市把一千年压缩在同一条街上。',wonders:['故宫与四季更迭','胡同里的早点摊','长城上的风','798艺术区的涂鸦'],tags:['历史','文化','城市']},
+  {id:'shanghai',name:'上海',lon:121.5,lat:31.2,emoji:'🌆',region:'华东',tagline:'东方与西方在这里握手',story:'外滩对岸的浦东，三十年前还是农田，现在是摩天楼。一栋老洋房里可能住着十户人家，说五种方言。黄浦江每天带走潮水，也带来来自世界各地的船。这座城市从不睡觉。',wonders:['外滩的夜景','弄堂里的石库门','苏州河边的涂鸦','周边古镇水乡'],tags:['城市','建筑','现代']},
+  {id:'chengdu',name:'成都',lon:104.1,lat:30.7,emoji:'🐼',region:'西南',tagline:'熊猫和火锅，慢下来的城市',story:'成都人发明了"悠闲"这个词的生活版本。茶馆里的人一坐就是一个下午，打麻将、晒太阳。大熊猫在林里打滚，不在乎任何日程。成都有数量众多的创业年轻人，也有世界上最安静的午后。',wonders:['大熊猫繁育基地','宽窄巷子的茶馆','青城山古道','夜晚的火锅街'],tags:['自然','动物','生活']},
+  {id:'qingdao',name:'青岛',lon:120.4,lat:36.1,emoji:'🌊',region:'华东',tagline:'红瓦绿树，海风里有渔人的秘密',story:'青岛的海风有一种咸腥的鲜味。清晨五点，渔船回港，鱼市上有人专门给不知名的鱼取名字——有些鱼生活在一百米深的水下，从未见过阳光。德国人留下的红砖建筑，见证了百年来的潮起落。',wonders:['崂山道观与茶','海鲜市场的清晨','德式老建筑群','奥帆中心海岸线'],tags:['海洋','自然','历史']},
+  {id:'lhasa',name:'拉萨',lon:91.1,lat:29.7,emoji:'⛩️',region:'西藏',tagline:'离太阳最近的城市，布达拉宫在云上',story:'拉萨的天蓝到一种不像真实的程度。布达拉宫建在山上，脚下是磕长头朝圣的藏族人，他们从几千公里外走来，只为见一面。高原的空气薄而干净，让每一口呼吸都变得郑重。',wonders:['布达拉宫','八廓街的朝圣者','色拉寺辩经','纳木错圣湖的星空'],tags:['文化','宗教','自然','高原']},
+  {id:'harbin',name:'哈尔滨',lon:126.5,lat:45.8,emoji:'❄️',region:'东北',tagline:'零下三十度的冰雕王国',story:'哈尔滨的冬天，呼出的气立刻结成白雾。工人们用电锯把松花江的冰切成砖块，建造一整座可以发光的冰城。街上售卖的冻饺子硬得像石头，咬下去嘎嘣响。',wonders:['冰雪大世界','中央大街俄式建筑','雪乡的雾凇','东北虎林园'],tags:['冰雪','城市','自然']},
+  {id:'dunhuang',name:'敦煌',lon:94.7,lat:40.1,emoji:'🏺',region:'西北',tagline:'沙漠深处的一千年壁画',story:'敦煌藏在沙漠里，但一千年前是世界最繁忙的路口——丝绸之路在此交汇。莫高窟里藏着古人想象的天堂模样，壁画里飞天的裙摆在风中飘了一千年。鸣沙山的沙在风中会发出奇异的鸣响。',wonders:['莫高窟壁画','鸣沙山月牙泉','汉长城遗址','夜晚无污染的星空'],tags:['历史','艺术','沙漠','丝路']},
+  {id:'lijiang',name:'丽江',lon:100.2,lat:26.9,emoji:'🏔️',region:'西南',tagline:'纳西古乐与玉龙雪山共存',story:'丽江古城里的水来自玉龙雪山，清澈可以直接饮用。纳西族用"东巴文"记录故事，这是世界上还在活用的最古老象形文字之一。古城的猫住在屋顶上，懒得理人。',wonders:['玉龙雪山冰川','束河古镇','东巴文字','泸沽湖摩梭文化'],tags:['民族','自然','文化','雪山']},
+  {id:'xiamen',name:'厦门',lon:118.1,lat:24.5,emoji:'🎵',region:'华南',tagline:'钢琴岛，温柔的海与老建筑',story:'鼓浪屿岛上禁止汽车，只有脚步声和海浪声。这座小岛曾住过各国领事，留下四十多种风格的建筑。岛上很多人家有钢琴，夜里会听到有人弹肖邦，混着海风一起飘来。',wonders:['鼓浪屿老建筑群','曾厝垵渔村','南普陀寺','胡里山百年炮台'],tags:['海洋','音乐','历史','岛屿']},
+  {id:'xian',name:'西安',lon:108.9,lat:34.3,emoji:'⚔️',region:'西北',tagline:'地下沉睡的帝国，城墙上的自行车',story:'西安的地下埋着太多秘密。兵马俑是农民打井时发现的——八千个真人大小的陶俑，每张脸都不同，在地下等了两千年。城墙至今完整，可以骑自行车绕城圈，看新旧城并肩站立。',wonders:['秦始皇兵马俑','古城墙骑行','回民街百年美食','大雁塔的钟声'],tags:['历史','考古','文化']},
+  {id:'sanya',name:'三亚',lon:109.5,lat:18.3,emoji:'🏖️',region:'华南',tagline:'中国最南的海，浅绿渐变到深蓝',story:'三亚的海水从岸边的浅绿渐变到深蓝，能见度好时可以看到十几米深的珊瑚。这里生活着"疍家人"——他们的祖先世世代代住在船上，以海为家，不曾上岸定居。',wonders:['珊瑚礁潜水','天涯海角日落','南山佛像','疍家渔村生活'],tags:['海洋','自然','少数民族']},
+  {id:'urumqi',name:'乌鲁木齐',lon:87.6,lat:43.8,emoji:'🐪',region:'西北',tagline:'离海洋最远的城市，三十种语言的集市',story:'乌鲁木齐是世上离海洋最远的城市。大巴扎的集市里有三十种语言同时飘动，来自整个中亚的商人在此聚集。天山的雪水让这片沙漠长出了世界最甜的哈密瓜。',wonders:['天山天池','国际大巴扎','吐鲁番葡萄沟','塔克拉玛干沙漠边缘'],tags:['民族','沙漠','历史','丝路']}
+];
+const WORLD = [
+  {id:'tokyo',name:'东京',country:'日本',lon:139.7,lat:35.7,emoji:'🗼',tagline:'三千万人的城市，安静如图书馆',story:'每天早上，东京的地铁能精确到30秒。新宿站是世界最繁忙的车站，却几乎没有喧嚣。有些餐厅只做一道菜，坚持了五十年。富士山有时会在车窗边突然出现，让人停下脚步。',wonders:['富士山与新干线','筑地的清晨鱼市','枯山水庭院','秋叶原动漫街'],tags:['城市','文化','精工']},
+  {id:'arctic',name:'北极光',country:'冰岛·北极',lon:-19,lat:65,emoji:'🌌',tagline:'极光是高空粒子在跳舞',story:'极光在距地面一百公里的高空出现，是带电粒子撞击大气层发出的光——绿色、紫色，像窗帘一样飘动。北极的冬天没有太阳，夏天太阳远不落下。北极熊会游几十公里的泳寻找食物。',wonders:['北极光','午夜太阳','北极熊','冰河漂流'],tags:['自然','极地','天文']},
+  {id:'amazon',name:'亚马',country:'巴西',lon:-60,lat:-3,emoji:'🌿',tagline:'地球之肺，未被命名的物种之家',story:'亚马逊雨林大到可以装下整个西欧。雨林里有粉红色的河豚，有科学家一生只遇到过一次的青蛙，有至今从未接触过外部世界的部落。每天下午，这里准时下一场雨。',wonders:['粉红河豚','雨林树冠层的世界','隐秘的原住民部落','亚马逊河日落'],tags:['自然','生物','丛林']},
+  {id:'masai',name:'马赛马拉',country:'肯尼亚',lon:35.1,lat:-1.5,emoji:'🦁',tagline:'两百万角马渡河，地球最大的迁徙',story:'每年七月，两百万只角马从坦桑尼亚渡过马赛马拉河，河里有等待了一年的鳄鱼。长颈鹿的心脏有成年人那么大，才能把血泵到两米高的脑袋。马赛族战士用跳跃高度展示力量。',wonders:['角马大迁徙','草原日落','马赛族跳跃舞','狮群的清晨狩猎'],tags:['自然','动物','非洲','迁徙']},
+  {id:'venice',name:'威尼斯',country:'意大利',lon:12.3,lat:45.4,emoji:'🛶',tagline:'建在水上的城市，正在缓缓下沉',story:'威尼斯没有一条汽车路，出门就是河。这座城市建在118个小岛上，用数百万根木桩插在海底支撑，已经站了一千年。洪水每年涨进广场，居民们穿雨靴逛街。',wonders:['贡多拉水','圣马可大教堂','玻璃岛工坊','面具嘉年华'],tags:['建筑','历史','城市','水']},
+  {id:'reef',name:'大堡礁',country:'澳大利亚',lon:146,lat:-18,emoji:'🐠',tagline:'从太空可以看见的活生物',story:'大堡礁是地球上最大的生命结构，由数十亿珊瑚虫构成，从太空都能看见。里面住着一千五百种鱼，有些鱼可以改变性别。珊瑚礁正因为海水变暖而白化消失。',wonders:['珊瑚礁潜水','海龟产卵','儒艮（美人鱼原型）','水下洞穴探索'],tags:['海洋','生物','自然','濒危']},
+  {id:'sahara',name:'撒哈拉',country:'北非',lon:8,lat:23,emoji:'🏜️',tagline:'白天50度，夜晚接近冰点',story:'撒哈拉是世界最大的沙漠，和整个中国差不多大。白天地表温度可达七十度，夜晚几小时后就接近冰点——沙子散热极快。沙漠里有地下河、绿洲，以及几千年前刻在岩石上的大象壁画。',wonders:['无光污染的星空','沙丘冲浪','撒哈拉化石鱼','图阿雷格族商队'],tags:['沙漠','自然','极端']},
+  {id:'iceland',name:'冰岛',country:'冰岛',lon:-19,lat:64.9,emoji:'🌋',tagline:'冰川与火山共存，人均读书最多的地方',story:'冰岛三分之一国土是熔岩荒地，也有欧洲最大的冰川。这里人均读书量世界第一，每十个人里有个出过书。地热能量让全国暖气几乎免费，街道下铺着热管防止结冰。',wonders:['蓝湖地热温泉','火山口内部探索','极光追逐','冰川徒步'],tags:['自然','地质','极地','文化']}
+];
+const CAREERS = [
+  {id:'marine',title:'海洋生物学家',emoji:'🐙',tagline:'给从未见过的生物取名字',tags:['海洋','生物','自然','科学'],ifYouLike:'你喜欢在河边翻石头找小虫、喜欢观察动物、喜欢待在水里',day:'今天我穿着潜水服下到水下五十米，任务是给一种新发现的发光深海鱼做记录。上周我们确认它是一个新物种——今天我要给它取名字，这个名字会永远留在科学文献里。下午回到船上，对着电脑分析录像，想着这条鱼在完全没有光的深处，孤独地活了多少万年。'},
+  {id:'wildlife',title:'野生动物摄影师',emoji:'📷',tagline:'在丛林里等一张照片可以等一周',tags:['自然','动物','探索','艺术'],ifYouLike:'你喜欢在山里观察动物、喜欢等待和安静、喜欢把看到的东西记录下来',day:'我在肯尼亚草原的帐篷里住了七天，等待一头猎豹。今天它终于出现在地平线——我的手开始抖。拍了三百张，只有两张是好的。晚上发现相机卡里有只不认识的鸟，可能是新记录。靴子里进了一只蜴。'},
+  {id:'game',title:'游戏设计师',emoji:'🎮',tagline:'设计让玩家哭出来的那个故事',tags:['创造','故事','数字','艺术'],ifYouLike:'你喜欢玩游戏并思考"这里为什么这么设计"、喜欢讲故事、喜欢拼乐高',day:'今天我们讨论了一个问题：当玩家杀死游戏里第一个敌人时，应该有愧疚感吗？这个讨论开了四个小时。游戏设计其实是在设计人的感受——恐惧、兴奋、心碎、成就感。下午我在纸上画了一百种地图形状，只为找到一个让玩家迷路时依然觉得有趣的设计。'},
+  {id:'perfumer',title:'调香师',emoji:'🌸',tagline:'用气味装一瓶下雨前的空气',tags:['艺术','创造','自然','感知'],ifYouLike:'你喜欢闻东西的味道、喜欢描述感觉、对化学或艺术感兴趣',day:'今天的任务是"重现1920年代巴黎一家旧书店的气味"——旧纸、灰尘、木头、一点皮革。我的鼻子能分辨六千多种气味，但现在只有三种原料能组合出这个感觉。调香就像写诗，不同的字放在一起，意思完全变了。'},
+  {id:'paleo',title:'古生物学家',emoji:'🦕',tagline:'从一块骨头还原一亿年前的世界',tags:['历史','科学','自然','探索'],ifYouLike:'你喜欢挖土、对恐龙或化石感兴趣、有耐心、喜欢像侦探一样解谜',day:'我们在内蒙古挖了三周，今天终于找到一块完整的恐龙肋骨化石。我用小刷子一毫米一毫米地清理了六个小时。这块骨头属于一只一亿两千万年前死去的恐龙。从某种意义上说，今天我握过一只恐龙的骨头。'},
+  {id:'sound',title:'声音设计师',emoji:'🎧',tagline:'电影里的雷声可能是用铁板做的',tags:['音乐','创造','故事','艺术'],ifYouLike:'你喜欢音乐、喜欢玩创意、喜欢发现"这个声音是怎么做出来的"',day:'今天我要给电影里的外星人设计声音。外星人不存在，没有参考——我用杯子蘸水摩擦边缘、把蝉声录音降速、叠加大提琴泛音。外星人的"说话声"就是这三种声音混合的。电影里每一个声音背后都有这样的故事。'},
+  {id:'space',title:'太空工程师',emoji:'🚀',tagline:'设计能飞出太阳系的机器',tags:['科学','数字','建造','探索'],ifYouLike:'你喜欢数学和物理、喜欢思考宇宙、喜欢解决从未有人解决过的问题',day:'旅行者一号是1977年发射的，现在已飞出太阳系，距地球230亿公里还在发回信号。我的团队今天研究新型推进系统，让飞船在我们有生之年飞到最近的恒星。核心问题：如何让一台机器在没有维修的情况下运行一千年。'},
+  {id:'uwarch',title:'水下考古学家',emoji:'⚓',tagline:'在海底挖掘沉没的古代城市',tags:['历史','海洋','探索','科学'],ifYouLike:'你喜欢游泳和潜水、喜欢历史、喜欢像侦探一样发现线索',day:'今天我们在地中海水下三十米发现了一艘两千年的罗马商船，船舱里有几百个完整的陶罐，里面可能还有当时的橄榄油。我在水下只能停留四十五分钟，然后必须上来。这艘船在那里等了两千年，不在乎再等一天。'},
+  {id:'eagle',title:'驯鹰师',emoji:'🦅',tagline:'中亚草原传承千年的古老技艺',tags:['自然','动物','文化','探索'],ifYouLike:'你喜欢动物、喜欢户外生活、对游牧民族文化感兴趣',day:'我的鹰叫萨尔苏克，跟了我七年。今天早上四点出门，气温零下二十五度。萨尔苏克在我手臂上等着，突然冲向一只狐狸——俯冲、出击，一切在三秒内完成。驯鹰师和鹰之间不是主仆，更像是两个猎人的伙伴关系。'},
+  {id:'climate',title:'气候科学家',emoji:'🌡️',tagline:'读懂十五万年前冰芯里藏着的天',tags:['科学','自然','数字','探索'],ifYouLike:'你喜欢科学、关心地球的未来、喜欢用数据理解大事情',day:'今天收到了从南极运来的冰芯样本——这段冰在十五万年前形成，气泡里封存了当时的大气成分。我用细针刺破气泡，分析里面的空气。十五万年前，地球大气中的二氧化碳浓度比今天低一倍。那一刻，我握着一口来自史前的空气。'},
+  {id:'ethno',title:'民族志研究者',emoji:'📖',tagline:'和一个落住一年，记录他们的生活方式',tags:['文化','故事','民族','探索'],ifYouLike:'你喜欢了解不同的人和文化、喜欢学语言、好奇别人是怎么生活的',day:'我在亚马逊雨林住了八个月，学会了一种只有三百人说的语言。这种语言里没有"昨天"和"明天"，只有"之前"和"之后"——他们的时间概念和我们完全不同。今天村里的孩子教我用叶子折一种小船，我录了下来——这可能是这项技艺留下的唯一记录。'},
+  {id:'acoustic',title:'建筑声学工程师',emoji:'🎼',tagline:'设计音乐厅，让声音在里面跳舞',tags:['音乐','建造','数字','艺术'],ifYouLike:'你喜欢音乐、喜欢数学或物理、对建筑感兴趣',day:'今天在上海交响乐团音乐厅做测试——向空气里发一声气球爆破，用五十个麦克风记录声音反弹、消散的轨迹。这座音乐厅混响时间是2.1秒，刚好是大提琴最好听的范围。我的工作是让建筑和音乐相爱。'}
+];
+
+let state={tab:'map',mapMode:'china',selLoc:null,selCareer:null,kids:[],records:[],search:'',recFilter:'all'};
+const genId=()=>Math.random().toString(36).slice(2,10);
+
+function switchTab(t){
+  state.tab=t;state.selLoc=null;state.selCareer=null;
+  ['map','careers','records'].forEach(x=>{
+    document.getElementById('nb-'+x).classList.toggle('act',x===t);
+  });
+  render();
+}
+
+function render(){document.getElementById('content').innerHTML='';renderTab();}
+
+function renderTab(){
+  const c=document.getElementById('content');
+  if(state.tab==='map') renderMap(c);
+  else if(state.tab==='careers') renderCareers(c);
+  else renderRecords(c);
+}
+
+const W=860,H=490;
+let geoData=null,geoLoading=true;
+
+function renderMap(c){
+  c.style.display='flex';c.style.flexDirection='column';
+  c.innerHTML=`
+  <div class="mode-bar">
+    <button class="mode-btn ${state.mapMode==='china'?'act':''}" onclick="switchMode('china')">🗺 中国地图</button>
+    <button class="mode-btn ${state.mapMode==='world'?'act':''}" onclick="switchMode('world')">🌍 世界地图</button>
+    <span style="margin-left:auto;font-size:11px;color:var(--color-text-tertiary)">滚轮缩放 · 拖动平移 · 点击标记查看故事</span>
+  </div>
+  <div class="map-wrap">
+    <div class="map-svg-area" id="map-area"></div>
+    <div id="loc-panel-area"></div>
+  </div>`;
+  drawMap();
+  if(state.selLoc) renderLocPanel();
+}
+
+function switchMode(m){state.mapMode=m;state.selLoc=null;render();}
+
+function drawMap(){
+  const area=document.getElementById('map-area');
+  if(!area)return;
+  const svg=d3.select(area).append('svg').attr('viewBox',`0 0 ${W} ${H}`)
+    .style('width','100%').style('height','100%').style('display','block').style('cursor','grab');
+  svg.append('rect').attr('width',W).attr('height',H).attr('fill','#8FB8CC');
+
+  // projection for converting between lon/lat and x/y
+  const proj=state.mapMode==='china'
+    ?d3.geoMercator().center([104,37]).scale(700).translate([W/2,H/2])
+    :d3.geoNaturalEarth1().scale(148).translate([W/2,H/2]);
+
+  const g=svg.append('g');
+
+  if(geoData){
+    g.selectAll('path').data(geoData.features).join('path')
+      .attr('d',d3.geoPath().projection(proj))
+      .attr('fill','#A8C090').attr('stroke','rgba(255,255,255,0.7)').attr('stroke-width',.5);
+  } else if(geoLoading){
+    svg.append('text').attr('x',W/2).attr('y',H/2).attr('text-anchor','middle')
+      .attr('fill','rgba(255,255,255,0.7)').attr('font-size',14).text('地图数据加载中...');
+  }
+
+  const locs=state.mapMode==='china'?CHINA:WORLD;
+  locs.forEach(loc=>{
+    const pt=proj([loc.lon,loc.lat]);
+    if(!pt)return;
+    const [x,y]=pt;
+    const isSel=state.selLoc?.id===loc.id;
+    const lg=g.append('g').style('cursor','pointer')
+      .on('click',function(ev){ev.stopPropagation();selectLoc(loc);})
+      .on('mouseenter',function(){d3.select(this).select('circle.dot').attr('r',isSel?9:8).attr('fill',isSel?'#2D7A6B':'#D4801A');})
+      .on('mouseleave',function(){d3.select(this).select('circle.dot').attr('r',isSel?9:6).attr('fill',isSel?'#2D7A6B':'#B87020');});
+    if(isSel) lg.append('circle').attr('cx',x).attr('cy',y).attr('r',16).attr('fill','rgba(184,112,32,.25)');
+    lg.append('circle').attr('cx',x+1).attr('cy',y+1).attr('r',isSel?9:6).attr('fill','rgba(35,20,16,.2)');
+    lg.append('circle').classed('dot',true).attr('cx',x).attr('cy',y).attr('r',isSel?9:6)
+      .attr('fill',isSel?'#2D7A6B':'#B87020').attr('stroke','white').attr('stroke-width',2);
+    lg.append('text').attr('x',x).attr('y',y-12).attr('text-anchor','middle').attr('font-size',12)
+      .style('pointer-events','none').style('user-select','none').text(loc.emoji);
+    lg.append('text').attr('x',x).attr('y',y+22).attr('text-anchor','middle').attr('font-size',10)
+      .attr('fill','#1a1008').attr('font-weight','600').style('pointer-events','none').style('user-select','none').text(loc.name);
+  });
+
+  // zoom behavior: hide popup when interacting
+  const zoom=d3.zoom().scaleExtent([.5,10])
+    .on('start',()=>{hideMapPopup();})
+    .on('zoom',ev=>g.attr('transform',ev.transform));
+  svg.call(zoom);
+
+  // click on empty map: show coordinates popup (markers stopPropagation so won't trigger)
+  svg.on('click',function(event){
+    // pointer relative to svg
+    const [mx,my]=d3.pointer(event);
+    // convert to lon/lat
+    let ll=null; try{ ll=proj.invert([mx,my]); }catch(e){}
+    if(ll){
+      const lon=+(ll[0].toFixed(4));
+      const lat=+(ll[1].toFixed(4));
+      // show popup near pointer
+      showMapPopup(mx,my,lon,lat);
+    }
+    // deselect any selected location
+    state.selLoc=null;render();
+  });
+}
+
+function selectLoc(loc){state.selLoc=loc;render();}
+
+function renderLocPanel(){
+  const area=document.getElementById('loc-panel-area');
+  if(!area)return;
+  const loc=state.selLoc;
+  area.innerHTML=`
+  <div class="loc-panel">
+    <div class="lp-head">
+      <div>
+        <div style="font-size:28px">${loc.emoji}</div>
+        <div style="font-size:19px;font-weight:500;color:var(--color-text-primary);margin-top:4px">${loc.name}</div>
+        ${loc.country?`<div style="font-size:11px;color:var(--color-text-tertiary)">${loc.country}</div>`:''}
+      </div>
+      <button class="icon-btn" onclick="state.selLoc=null;render()">✕</button>
+    </div>
+    <div class="lp-scroll">
+      <div style="font-size:13px;color:#B87020;font-style:italic;line-height:1.6;margin-bottom:12px">「${loc.tagline}」</div>
+      <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.9;margin-bottom:16px">${loc.story}</div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);font-weight:500;letter-spacing:.5px;margin-bottom:8px">值得探索的事</div>
+      ${loc.wonders.map(w=>`<div style="font-size:12px;color:var(--color-text-primary);padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary);display:flex;gap:6px;align-items:center"><span style="color:#B87020;font-size:11px">→</span>${w}</div>`).join('')}
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px">${(loc.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    </div>
+    <div class="lp-foot">
+      <button class="primary-btn" onclick="openRecordModal('location','${loc.id}','${loc.name}','${loc.emoji}',${JSON.stringify(loc.tags||[]).replace(/"/g,"'")})">✦ 记录孩子的兴趣</button>
+    </div>
+  </div>`;
+}
+
+function renderCareers(c){
+  c.style.cssText='display:flex;flex-direction:column;height:100%;overflow:hidden';
+  if(state.selCareer){renderCareerDetail(c);return;}
+  c.innerHTML=`
+  <div style="padding:12px 16px;border-bottom:.5px solid var(--color-border-tertiary);background:var(--color-background-primary)">
+    <input placeholder="搜索职业名称、兴趣方向..." value="${state.search}" oninput="state.search=this.value;renderCareerList()" style="width:100%;padding:8px 12px;border-radius:8px;border:.5px solid var(--color-border-secondary);font-size:13px;background:var(--color-background-secondary);color:var(--color-text-primary);outline:none">
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="career-grid" id="career-grid"></div>
+  </div>`;
+  renderCareerList();
+}
+
+function renderCareerList(){
+  const grid=document.getElementById('career-grid');
+  if(!grid)return;
+  const q=state.search.toLowerCase();
+  const list=q?CAREERS.filter(c=>c.title.includes(q)||c.tags.some(t=>t.includes(q))||c.tagline.includes(q)):CAREERS;
+  grid.innerHTML=list.map(c=>`
+  <div class="career-card" onclick="selectCareer('${c.id}')">
+    <div style="font-size:30px;margin-bottom:10px">${c.emoji}</div>
+    <div style="font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:5px">${c.title}</div>
+    <div style="font-size:12px;color:#B87020;font-style:italic;margin-bottom:10px;line-height:1.5">${c.tagline}</div>
+    <div style="font-size:11px;color:var(--color-text-secondary);line-height:1.5">${c.ifYouLike}</div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:3px">${c.tags.slice(0,2).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+  </div>`).join('');
+}
+
+function selectCareer(id){state.selCareer=CAREERS.find(c=>c.id===id);render();}
+
+function renderCareerDetail(c){
+  const car=state.selCareer;
+  c.innerHTML=`
+  <div style="height:100%;overflow-y:auto">
+    <div style="position:sticky;top:0;background:var(--color-background-primary);padding:12px 16px;border-bottom:.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:center;z-index:5">
+      <button onclick="state.selCareer=null;render()" style="background:none;border:none;cursor:pointer;font-size:13px;color:#B87020;font-weight:500">← 返回职业全书</button>
+      <button class="primary-btn" style="width:auto;padding:8px 18px" onclick="openRecordModal('career','${car.id}','${car.title}','${car.emoji}',${JSON.stringify(car.tags).replace(/"/g,"'")})">✦ 记录兴趣</button>
+    </div>
+    <div style="max-width:600px;margin:0 auto;padding:24px 20px">
+      <div style="font-size:48px;margin-bottom:12px">${car.emoji}</div>
+      <div style="font-size:24px;font-weight:500;color:var(--color-text-primary);margin-bottom:6px">${car.title}</div>
+      <div style="font-size:14px;color:#B87020;font-style:italic;margin-bottom:22px;line-height:1.5">${car.tagline}</div>
+      <div style="background:var(--color-background-primary);border-radius:var(--border-radius-lg);padding:18px 20px;border:.5px solid var(--color-border-tertiary);margin-bottom:16px">
+        <div style="font-size:11px;color:var(--color-text-tertiary);font-weight:500;letter-spacing:.5px;margin-bottom:10px">普通工作日 · 第一人称</div>
+        <div style="font-size:14px;color:var(--color-text-secondary);line-height:2">${car.day}</div>
+      </div>
+      <div style="background:rgba(184,112,32,.08);border-radius:8px;padding:14px 16px;border:1px dashed rgba(184,112,32,.3);margin-bottom:16px">
+        <div style="font-size:11px;color:#B87020;font-weight:500;margin-bottom:6px">如果你……可能会喜欢这个职业</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.7">${car.ifYouLike}</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${car.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    </div>
+  </div>`;
+}
+
+function renderRecords(c){
+  c.style.cssText='display:flex;flex-direction:column;height:100%;overflow:hidden';
+  const sideItems=[
+    {id:'all',label:'全部记录',icon:'📋',count:state.records.length},
+    {id:'group',label:'群体兴趣',icon:'👥',count:state.records.filter(r=>r.isGroup).length},
+    ...state.kids.map(k=>({id:k.id,label:k.name,icon:'👤',count:state.records.filter(r=>r.childIds?.includes(k.id)).length,isKid:true}))
+  ];
+  const visible=state.records.filter(r=>{
+    if(state.recFilter==='all')return true;
+    if(state.recFilter==='group')return r.isGroup;
+    return r.childIds?.includes(state.recFilter);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+
+  c.innerHTML=`
+  <div class="rec-layout">
+    <div class="rec-sidebar">
+      <div style="padding:12px;border-bottom:.5px solid var(--color-border-tertiary)">
+        <div style="font-size:11px;color:var(--color-text-tertiary);font-weight:500;margin-bottom:8px;letter-spacing:.5px">孩子名单</div>
+        <div style="display:flex;gap:6px">
+          <input id="kid-input" placeholder="输入姓名…" onkeydown="if(event.key==='Enter')addKid()" style="flex:1;padding:6px 8px;font-size:12px">
+          <button onclick="addKid()" style="padding:6px 10px;border-radius:8px;border:none;background:#B87020;color:#fff;cursor:pointer;font-size:14px;font-weight:500">+</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px">
+        ${sideItems.map(item=>`
+        <div class="sid-item ${state.recFilter===item.id?'act':''}" onclick="state.recFilter='${item.id}';render()">
+          <span style="font-size:12px;color:${state.recFilter===item.id?'#B87020':'var(--color-text-primary)'};font-weight:${state.recFilter===item.id?'500':'400'}">${item.icon} ${item.label}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="badge">${item.count}</span>
+            ${item.isKid?`<button onclick="event.stopPropagation();removeKid('${item.id}')" style="background:none;border:none;cursor:pointer;color:var(--color-text-tertiary);font-size:11px;padding:1px 2px">✕</button>`:''}
+          </div>
+        </div>`).join('')}
+      </div>
+      <div style="padding:10px;border-top:.5px solid var(--color-border-tertiary);display:flex;gap:6px">
+        <button onclick="doImport()" style="flex:1;padding:7px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;font-size:11px;color:var(--color-text-secondary)">↑ 导入</button>
+        <button onclick="doExport()" style="flex:1;padding:7px;border-radius:8px;border:.5px solid rgba(184,112,32,.5);background:rgba(184,112,32,.1);cursor:pointer;font-size:11px;color:#B87020;font-weight:500">↓ 导出</button>
+      </div>
+    </div>
+    <div class="rec-main">
+      ${visible.length===0?`<div class="emp"><div style="font-size:40px;margin-bottom:14px">📝</div><div style="font-size:14px;font-weight:500;margin-bottom:6px">还没有记录</div><div style="font-size:12px">在地图或职业全书里点击「记录兴趣」</div></div>`
+      :visible.map(r=>{
+        const names=state.kids.filter(k=>r.childIds?.includes(k.id)).map(k=>k.name);
+        return`<div class="rec-card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:22px">${r.refEmoji}</span>
+              <div><div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">${r.refName}</div>
+              <div style="font-size:11px;color:var(--color-text-tertiary)">${r.type==='location'?'地图位置':'职业探索'}</div></div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--color-text-tertiary)">${r.date}</div>
+              <div style="font-size:11px;margin-top:2px;color:${r.isGroup?'#2D7A6B':'#B87020'};font-weight:500">${r.isGroup?'👥 群体兴趣':'👤 '+( names.join('、')||'未知')}</div>
+            </div>
+          </div>
+          ${r.note?`<div style="font-size:12px;color:var(--color-text-secondary);padding:8px 10px;background:var(--color-background-secondary);border-radius:6px;line-height:1.7;margin-bottom:8px">「${r.note}」</div>`:''}
+          <div style="display:flex;flex-wrap:wrap;gap:3px">${(r.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function addKid(){
+  const inp=document.getElementById('kid-input');
+  const n=(inp?.value||'').trim();
+  if(!n)return;
+  state.kids.push({id:genId(),name:n});
+  render();
+}
+
+function removeKid(id){
+  state.kids=state.kids.filter(k=>k.id!==id);
+  state.records=state.records.filter(r=>!r.childIds?.includes(id));
+  if(state.recFilter===id)state.recFilter='all';
+  render();
+}
+
+function openRecordModal(type,id,name,emoji,tagsStr){
+  const tags=tagsStr.replace(/'/g,'"');
+  const loc=type==='location'?(state.mapMode==='china'?CHINA:WORLD).find(l=>l.id===id):CAREERS.find(c=>c.id===id);
+  const realTags=loc?.tags||[];
+  const overlay=document.getElementById('modal-overlay');
+  const box=document.getElementById('modal-box');
+  overlay.style.display='flex';
+  let selKids=[],isGroup=false;
+  renderModal(box,{type,id,name,emoji,tags:realTags},selKids,isGroup,'');
+
+  function renderModal(box,info,selKids,isGroup,note){
+    box.innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--color-text-tertiary);letter-spacing:.5px;margin-bottom:4px">记录兴趣</div>
+      <div style="font-size:20px;font-weight:500;color:var(--color-text-primary)">${info.emoji} ${info.name}</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-bottom:8px">这次发现属于</div>
+      <div style="display:flex;gap:8px">
+        <button class="opt-btn ${!isGroup?'act':''}" onclick="isGroup=false;renderModal(document.getElementById('modal-box'),info,selKids,isGroup,document.getElementById('rec-note').value)" style="text-align:center">
+          <div style="font-size:13px;font-weight:500;color:${!isGroup?'#B87020':'var(--color-text-primary)'}"">某个孩子</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">个人兴趣</div>
+        </button>
+        <button class="opt-btn ${isGroup?'act':''}" onclick="isGroup=true;renderModal(document.getElementById('modal-box'),info,selKids,isGroup,document.getElementById('rec-note').value)" style="text-align:center">
+          <div style="font-size:13px;font-weight:500;color:${isGroup?'#B87020':'var(--color-text-primary)'}">全班/多人</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">群体兴趣</div>
+        </button>
+      </div>
+    </div>
+    ${!isGroup?`<div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-bottom:8px">选择孩子</div>
+      ${state.kids.length===0?
+        `<div style="font-size:12px;color:var(--color-text-tertiary);padding:10px 12px;background:var(--color-background-secondary);border-radius:6px">先去"兴趣记录"页添加孩子名单<div style="margin-top:8px"><button class="primary-btn" onclick="goToAddKid()">去添加孩子</button></div></div>`
+        :`<div style="display:flex;flex-wrap:wrap;gap:6px">${state.kids.map(k=>`<button class="chip ${selKids.includes(k.id)?'sel':''}" onclick="selKids.includes('${k.id}')?selKids.splice(selKids.indexOf('${k.id}'),1):selKids.push('${k.id}');renderModal(document.getElementById('modal-box'),info,selKids,isGroup,document.getElementById('rec-note').value)">${k.name}</button>`).join('')}</div>`
+      }
+    </div>`:''}
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;color:var(--color-text-secondary);font-weight:500;margin-bottom:6px">备注（选填）</div>
+      <textarea id="rec-note" placeholder="孩子在什么情况下眼睛亮了？说了什么让你印象深刻的话？">${note}</textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeModal()" style="flex:1;padding:10px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;font-size:13px;color:var(--color-text-secondary)">取消</button>
+      <button onclick="saveRecord('${info.type}','${info.id}','${info.name}','${info.emoji}',${JSON.stringify(info.tags||[])})" style="flex:2;padding:10px;border-radius:8px;border:none;background:${(isGroup||selKids.length>0)?'#B87020':'var(--color-border-secondary)'};cursor:pointer;color:${(isGroup||selKids.length>0)?'#fff':'var(--color-text-tertiary)'};font-size:13px;font-weight:500">✦ 保存记录</button>
+    </div>`;
+    window._modal={info,selKids,isGroup};
+    window.renderModal=renderModal;
+    window.selKids=selKids;
+    window.isGroup=isGroup;
+  }
+  window.renderModal=renderModal;
+  window.selKids=selKids;
+  window.isGroup=isGroup;
+}
+
+function closeModal(){document.getElementById('modal-overlay').style.display='none';}
+
+function saveRecord(type,id,name,emoji,tagsJSON){
+  const note=document.getElementById('rec-note')?.value||'';
+  const isg=window.isGroup;
+  const kids=[...(window.selKids||[])];
+  // validation: need to select at least one kid for personal interest
+  const box=document.getElementById('modal-box');
+  const saveBtn = box?.querySelectorAll('button')?.[1];
+  if(!isg && kids.length===0){
+    // shake the save button and show error toast
+    if(saveBtn){
+      saveBtn.classList.remove('shake');
+      // force reflow to restart animation
+      void saveBtn.offsetWidth;
+      saveBtn.classList.add('shake');
+      setTimeout(()=>saveBtn.classList.remove('shake'),450);
+    }
+    showToast('请选择孩子再保存','error');
+    return;
+  }
+  state.records.unshift({id:genId(),type,refId:id,refName:name,refEmoji:emoji,
+    tags:tagsJSON,isGroup:isg,childIds:isg?[]:kids,note,
+    date:new Date().toISOString().split('T')[0]});
+  closeModal();
+  render();
+  showToast('保存成功','success');
+}
+
+// show/hide map click popup
+function showMapPopup(x,y,lon,lat){
+  const wrap=document.getElementById('map-area');
+  const el=document.getElementById('map-popup');
+  if(!el||!wrap) return;
+  const region=getRegionFromLatLon(lon,lat);
+  el.innerHTML=`
+    <div class="row"><div style="font-weight:600">📍 自由点</div><div style="font-size:12px;color:var(--color-text-tertiary)">${region}</div></div>
+    <div class="row coords"><div>经度: ${lon}</div><div>纬度: ${lat}</div></div>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="opt-btn" onclick="openRecordModal('location','pt_${Date.now()}','坐标 ${lat},${lon}','📍',${JSON.stringify([]).replace(/\"/g,"'")})">记录兴趣</button>
+      <button class="opt-btn" onclick="hideMapPopup()">关闭</button>
+    </div>`;
+  // position the popup inside map-area, avoid overflow
+  const wrapRect = wrap.getBoundingClientRect();
+  const left = Math.max(8, Math.min(wrapRect.width - 240, x + 8));
+  const top = Math.max(8, Math.min(wrapRect.height - 120, y - 60));
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  el.style.display='block';
+  requestAnimationFrame(()=>el.classList.add('show'));
+}
+
+function hideMapPopup(){
+  const el=document.getElementById('map-popup');
+  if(!el) return; el.classList.remove('show');
+  setTimeout(()=>el.style.display='none',220);
+}
+
+// simple toast helper
+function showToast(msg,type='success',ms=2000){
+  const wrap=document.getElementById('toast-wrap'); if(!wrap) return;
+  const t=document.createElement('div'); t.className='toast '+(type==='error'?'error':'success'); t.textContent=msg;
+  wrap.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show'); setTimeout(()=>wrap.removeChild(t),250)},ms);
+}
+
+// simple region/continent guess (nearest sample point)
+function getRegionFromLatLon(lon,lat){
+  // if in china mode, find nearest CHINA city region
+  const list = state.mapMode==='china'?CHINA:WORLD;
+  let best=null; let bestD=1e9;
+  list.forEach(p=>{
+    const dx=(p.lon-lon), dy=(p.lat-lat); const d=dx*dx+dy*dy;
+    if(d<bestD){bestD=d;best=p}
+  });
+  if(best){
+    if(state.mapMode==='china') return best.region || '中国地区';
+    // for world, try map country to continent by a small mapping
+    const continentMap={'日本':'亚洲','巴西':'南美洲','肯尼亚':'非洲','意大利':'欧洲','澳大利亚':'大洋洲','冰岛':'欧洲','北非':'非洲'};
+    if(best.country){
+      for(const k in continentMap) if(best.country.includes(k)) return continentMap[k];
+    }
+    // fallback by lat
+    if(lat<-60) return '南极洲';
+    if(lat>60) return '北极/极地';
+    if(lon>-170 && lon<-30 && lat>15) return '北美洲';
+    if(lon>-90 && lon<30 && lat>-60 && lat<40) return '南美洲';
+    if(lon>-20 && lon<60) return '欧洲/非洲';
+    return '亚洲/其他';
+  }
+  return '';
+}
+
+// friendly navigation to add kids
+function goToAddKid(){
+  switchTab('records');
+  // focus input after render
+  setTimeout(()=>{const inp=document.getElementById('kid-input'); if(inp){inp.focus(); inp.classList.add('shake'); setTimeout(()=>inp.classList.remove('shake'),450)}} ,130);
+}
+
+function doExport(){
+  const d=JSON.stringify({v:1,kids:state.kids,records:state.records,at:new Date().toISOString()},null,2);
+  const b=new Blob([d],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download='兴趣记录_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.json';
+  a.click();
+}
+
+function doImport(){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{const d=JSON.parse(ev.target.result);
+        if(d.kids)state.kids=d.kids;
+        if(d.records)state.records=d.records;
+        render();
+      }catch{alert('文件格式不正确');}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+async function loadGeo(){
+  try{
+    if(!window.topojson){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js';
+        s.onload=res;s.onerror=rej;document.head.appendChild(s);
+      });
+    }
+    const r=await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    const t=await r.json();
+    geoData=window.topojson.feature(t,t.objects.countries);
+  }catch(e){console.log('Map outline load failed, using dots only');}
+  finally{geoLoading=false;render();}
+}
+
+render();
+loadGeo();
+</script>
