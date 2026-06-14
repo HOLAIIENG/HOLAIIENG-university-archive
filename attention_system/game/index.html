@@ -910,7 +910,7 @@
         const sceneRoadTiles = [];
         let sceneRoadTileLen = 12, sceneRoadSurfaceY = 0.4, _roadCursorZ = 0;
         // 草地：eztree(assets/tree) 的地面贴图 + 草丛/石头/花，还原 eztree.dev 真实草场
-        let grassBladeTemplates = [], rockTemplates = [], flowerTemplates = [];
+        let grassBladeTemplates = [], rockTemplates = [], flowerTemplates = [], grassOakTemplates = [];
         let grassGroundTex = null, dirtGroundTex = null, _grassAssetsLoading = false;
 
         // 共享金币几何体/材质
@@ -967,6 +967,7 @@
             sessionStartTime = Date.now();
             attnHistory.length = 0;
             hitCount = 0;
+            resetCoinTrail(); // 重置金币轨迹，开局即在玩家前方铺线
             document.getElementById('intro').classList.add('hidden');
             setTimeout(() => { document.getElementById('intro').style.display = 'none'; }, 800);
             document.getElementById('ui').classList.add('visible');
@@ -1251,10 +1252,45 @@
         }
 
         // ==================== 障碍物 ====================
+        // 金币与障碍物同车道时的最小 z 间距，避免二者视觉重叠
+        const SPAWN_CLEAR_Z = 4.5;
+        // 判断某车道在 z∈[zLo,zHi]（含间距）内是否已被 arr 中的物体占据
+        function laneRangeBlocked(arr, lane, zLo, zHi) {
+            const lx = lane * BLOCK_SIZE;
+            for (let i = 0; i < arr.length; i++) {
+                const o = arr[i];
+                if (!o || !o.position) continue;
+                if (Math.abs(o.position.x - lx) > BLOCK_SIZE * 0.5) continue; // 非同车道
+                if (o.position.z >= zLo - SPAWN_CLEAR_Z && o.position.z <= zHi + SPAWN_CLEAR_Z) return true;
+            }
+            return false;
+        }
+        // 在三条车道中随机选一条与 arr 不冲突的；三条都冲突则返回 null
+        function pickClearLane(arr, zLo, zHi) {
+            const order = [-1, 0, 1].sort(() => Math.random() - 0.5);
+            for (const lane of order) if (!laneRangeBlocked(arr, lane, zLo, zHi)) return lane;
+            return null;
+        }
+        // 清除某车道上 z 接近 zc 的金币（障碍生成时为其腾位，保证不重叠）
+        function cullCoinsAt(lane, zc) {
+            const lx = lane * BLOCK_SIZE;
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const c = coins[i];
+                if (Math.abs(c.position.x - lx) > BLOCK_SIZE * 0.5) continue; // 非同车道
+                if (Math.abs(c.position.z - zc) <= SPAWN_CLEAR_Z) {
+                    gsap.killTweensOf(c.position); gsap.killTweensOf(c.scale);
+                    scene.remove(c); coins.splice(i, 1);
+                }
+            }
+        }
+
         function spawnObstacle() {
             if (genshinActive) return; // 原神场景模式下不生成障碍物
             if (sceneGateActive) return; // 选门走廊期间不生成障碍物
+            // 障碍优先：随机车道+z，先清掉该处的金币为其腾位，从而保证金币与障碍不重叠
             const lane = Math.floor(Math.random() * 3) - 1;
+            const oz = playerGroup.position.z - 55 - Math.random() * 10;
+            cullCoinsAt(lane, oz);
             let obs, ty;
             if (currentScene) {
                 // 新场景（海上城市/草地/星系）换皮障碍物，沿用三车道生成/碰撞/计分逻辑
@@ -1280,7 +1316,7 @@
                 }
                 ty = type === 2 ? 1.2 : 0.6;
             }
-            obs.position.set(lane * 4, -5.4, playerGroup.position.z - 55 - Math.random() * 10);
+            obs.position.set(lane * 4, -5.4, oz);
             scene.add(obs); obs._scored = false; obs._jumped = false;
             obstacles.push(obs);
             gsap.to(obs.position, { y: ty, duration: 1.0, ease: "power2.out" });
@@ -1288,51 +1324,85 @@
             gsap.to(obs.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: 0.15 });
         }
 
-        // ==================== 金币系统 ====================
-        function spawnCoinGroup() {
-            // 增加产出：根据注意力显著提高每组金币数量及高价值金币概率
+        // ==================== 金币系统（连续轨迹：成线、单轨道、随注意力调密度） ====================
+        // 在指定车道、z 处生成一枚金币（按注意力与场景决定类型/价值/外观）
+        function layCoin(lane, z) {
             const attn = Math.min(100, Math.max(0, attention_value));
-            // 增强版基数（比原始实现更多金币）
-            const baseCount = attn < 20 ? 2 : attn < 50 ? 4 : attn < 80 ? 6 : 10;
-            const count = baseCount + Math.floor(Math.random() * 3); // 轻微随机性
-            const lane = Math.floor(Math.random() * 3) - 1;
-            const startZ = playerGroup.position.z - 45 - Math.random() * 15;
-
-            for (let i = 0; i < count; i++) {
-                let cType, cValue, cScale, cColor, coin;
-                const r = Math.random();
-                if (genshinActive) {
-                    // 原神货币：摩拉（金币×1）/ 星辉（紫宝石×3）/ 原石（冰蓝宝石×8，CC0 模型）
-                    if (attn > 60 && r < 0.20) { cType = 'rare'; cValue = 8; cScale = 0.9; cColor = '#9fe8ff'; }
-                    else if (attn > 30 && r < 0.40) { cType = 'large'; cValue = 3; cScale = 0.75; cColor = '#c3aef5'; }
-                    else { cType = 'normal'; cValue = 1; cScale = 0.5; cColor = '#ffd34d'; }
-                    if (cType === 'normal') {
-                        coin = new THREE.Mesh(coinGeo, gMoraMat || coinMat);
-                        coin.rotation.x = Math.PI / 2;
-                    } else {
-                        coin = gGemTemplates ? gGemTemplates[cType].clone(true) : gMakeGemProc(cType);
-                        coin._sharedAssets = !!gGemTemplates;
-                        coin._isGem = true;  // 宝石绕 y 轴旋转，不做硬币翻转
-                    }
-                } else {
-                    // 提高高价值金币概率：在中高注意力时更容易出现大/稀有金币
-                    let cMat;
-                    if (attn > 60 && r < 0.20) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.7; cColor = '#00ffcc'; }
-                    else if (attn > 30 && r < 0.40) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.6; cColor = '#ff8c00'; }
-                    else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.5; cColor = '#ffd700'; }
-                    coin = new THREE.Mesh(coinGeo, cMat);
+            const r = Math.random();
+            let cType, cValue, cScale, cColor, coin;
+            if (genshinActive) {
+                // 原神货币：摩拉（金币×1）/ 星辉（紫宝石×3）/ 原石（冰蓝宝石×8，CC0 模型）
+                if (attn > 60 && r < 0.20) { cType = 'rare'; cValue = 8; cScale = 0.9; cColor = '#9fe8ff'; }
+                else if (attn > 30 && r < 0.40) { cType = 'large'; cValue = 3; cScale = 0.75; cColor = '#c3aef5'; }
+                else { cType = 'normal'; cValue = 1; cScale = 0.5; cColor = '#ffd34d'; }
+                if (cType === 'normal') {
+                    coin = new THREE.Mesh(coinGeo, gMoraMat || coinMat);
                     coin.rotation.x = Math.PI / 2;
+                } else {
+                    coin = gGemTemplates ? gGemTemplates[cType].clone(true) : gMakeGemProc(cType);
+                    coin._sharedAssets = !!gGemTemplates;
+                    coin._isGem = true;  // 宝石绕 y 轴旋转，不做硬币翻转
                 }
-                const yPos = 1.0 + Math.random() * 0.5;
-                coin.position.set(lane * 4, -5, startZ - i * 2.5);
-                scene.add(coin);
-                coin._coinType = cType; coin._coinValue = cValue; coin._coinColor = cColor;
-                coin._collected = false; coin._animating = false;
-                coins.push(coin);
+            } else {
+                // 中高注意力时更容易出现大/稀有金币
+                let cMat;
+                if (attn > 60 && r < 0.20) { cType = 'rare'; cMat = coinMatRare; cValue = 8; cScale = 0.7; cColor = '#00ffcc'; }
+                else if (attn > 30 && r < 0.40) { cType = 'large'; cMat = coinMatLarge; cValue = 3; cScale = 0.6; cColor = '#ff8c00'; }
+                else { cType = 'normal'; cMat = coinMat; cValue = 1; cScale = 0.5; cColor = '#ffd700'; }
+                coin = new THREE.Mesh(coinGeo, cMat);
+                coin.rotation.x = Math.PI / 2;
+            }
+            const yPos = 1.0 + Math.random() * 0.3;
+            coin.position.set(lane * BLOCK_SIZE, -5, z);
+            scene.add(coin);
+            coin._coinType = cType; coin._coinValue = cValue; coin._coinColor = cColor;
+            coin._collected = false; coin._animating = false;
+            coins.push(coin);
+            gsap.to(coin.position, { y: yPos, duration: 0.8, ease: "power2.out" });
+            coin.scale.set(0, 0, 0);
+            gsap.to(coin.scale, { x: cScale, y: cScale, z: cScale, duration: 0.6, ease: "back.out(2)" });
+            return coin;
+        }
 
-                gsap.to(coin.position, { y: yPos, duration: 1.0, ease: "power2.out", delay: i * 0.05 });
-                coin.scale.set(0, 0, 0);
-                gsap.to(coin.scale, { x: cScale, y: cScale, z: cScale, duration: 0.8, ease: "elastic.out(1, 0.5)", delay: i * 0.05 + 0.1 });
+        // ---- 连续金币轨迹状态 ----
+        let coinTrailZ = null, coinTrailLane = 0, coinRunLeft = 0, coinGapLeft = 0;
+        const COIN_SPACING = 2.2;        // 同一条线上相邻金币的 z 间距
+        const COIN_SPAWN_AHEAD = 55;     // 始终保证玩家前方该范围内铺有金币
+        function resetCoinTrail() { coinTrailZ = null; coinTrailLane = 0; coinRunLeft = 0; coinGapLeft = 0; }
+        // 每帧推进金币轨迹：沿单一车道连续成线，换道只在间隔后发生（两车道不会同深度并存）
+        function updateCoinTrail() {
+            if (!gameStarted || gameEnded || isPaused || sceneGateActive) return;
+            const pz = playerGroup.position.z;
+            // 初始化 / 自愈：游标须始终位于玩家前方不远处，且立即起一条线（消除起步空窗，无前导间隔）
+            if (coinTrailZ === null || coinTrailZ > pz - 4 || coinTrailZ < pz - COIN_SPAWN_AHEAD - 40) {
+                coinTrailZ = pz - 6; coinTrailLane = currentLane; coinRunLeft = 6; coinGapLeft = 0;
+            }
+            const attn = Math.min(100, Math.max(0, attention_value));
+            let guard = 0;
+            while (coinTrailZ > pz - COIN_SPAWN_AHEAD && guard++ < 40) {
+                const z = coinTrailZ;
+                if (coinGapLeft > 0) {
+                    coinGapLeft--;                       // 处于间隔：本格不放币
+                } else if (coinRunLeft > 0) {
+                    // 障碍占道则本格跳过（障碍优先），否则落一枚
+                    if (!laneRangeBlocked(obstacles, coinTrailLane, z, z)) layCoin(coinTrailLane, z);
+                    coinRunLeft--;
+                } else {
+                    // 起一条新线：注意力越高线越长、间隔越短；换道只在此处（且随后留间隔）发生
+                    const runLen = (attn < 20 ? 3 : attn < 50 ? 5 : attn < 80 ? 7 : 9) + Math.floor(Math.random() * 3);
+                    let lane = coinTrailLane;
+                    if (Math.random() < 0.4) { const opts = [-1, 0, 1].filter(l => l !== coinTrailLane); lane = opts[Math.floor(Math.random() * opts.length)]; }
+                    // 整条线避开有障碍的车道
+                    if (laneRangeBlocked(obstacles, lane, z - runLen * COIN_SPACING, z)) {
+                        const alt = pickClearLane(obstacles, z - runLen * COIN_SPACING, z);
+                        if (alt !== null) lane = alt;
+                    }
+                    coinTrailLane = lane;
+                    coinRunLeft = runLen;
+                    coinGapLeft = (attn < 20 ? 3 : attn < 50 ? 2 : 1) + Math.floor(Math.random() * 2);
+                    continue; // 本轮仅决定线长/间隔，不前进游标
+                }
+                coinTrailZ -= COIN_SPACING;
             }
         }
 
@@ -2546,6 +2616,7 @@
                     obstacles.length = 0;
                     coins.forEach(c => { gsap.killTweensOf(c.position); gsap.killTweensOf(c.scale); scene.remove(c); disposeMesh(c); });
                     coins.length = 0;
+                    resetCoinTrail(); // 清空后重置游标，原神场景立即在前方重新铺线
                     gHideRunnerEnvironment();
                     gApplyGenshinLighting();
                     // 跑酷 UI（积分/金币/能量条）保留，仅隐藏数据面板
@@ -3658,10 +3729,7 @@
                     const _now = performance.now();
                     if (_now - lastObstacleTime >= OBSTACLE_INTERVAL) { spawnObstacle(); lastObstacleTime = _now; }
                     if (Math.random() < 0.4) spawnDecoration();
-                    const attn = Math.min(100, Math.max(0, attention_value));
-                    // 缩短间隔以增加金币产出
-                    const coinInterval = attn < 20 ? 2500 : attn < 50 ? 1500 : attn < 80 ? 900 : 500;
-                    if (_now - lastCoinTime >= coinInterval) { spawnCoinGroup(); lastCoinTime = _now; }
+                    // 金币改由 updateCoinTrail() 每帧按距离连续铺设，不再随地面分段生成
                     const d2 = new THREE.Object3D();
                     const animObj = { progress: 0 };
                     gsap.to(animObj, {
@@ -3751,7 +3819,7 @@
                 topColor: new THREE.Color(0x02010a), midColor: new THREE.Color(0x190a36), bottomColor: new THREE.Color(0x3d1f7a),
                 sunY: 0.08, sunColor: new THREE.Color(0xb388ff), exponent: 0.85,
                 fogColor: new THREE.Color(0x0a0524), fogNear: 18, fogFar: 100,
-                bloom: 0.9, vignette: { darkness: 1.4, offset: 0.95 },
+                bloom: 0.8, vignette: { darkness: 1.4, offset: 0.95 },
                 groundBase: 0x5a3da8, playerCol: new THREE.Color(0x84ffff),
                 ambient: 0x4a3a80, ambientI: 0.55, dirCol: 0xb388ff, dirI: 0.6
             };
@@ -3815,7 +3883,8 @@
             // 场景专属背景与道路
             clearSingletons();
             if (key === 'sea') { buildWater(); _roadCursorZ = playerGroup.position.z + 20; }
-            else if (key === 'galaxy') { buildGalaxy(); buildWave(); buildStars(); _roadCursorZ = playerGroup.position.z + 20; }
+            else if (key === 'galaxy') { buildGalaxy(); buildWave(); buildStars(); _roadCursorZ = playerGroup.position.z + 20;
+                if (composer.passes[1]) { composer.passes[1].radius = 0.35; composer.passes[1].threshold = 0.9; } } // samplexWave 辉光参数
             else if (key === 'grass') { buildGrassGround(); }
             _scenePropCursorZ = playerGroup.position.z - 25;
         }
@@ -3883,25 +3952,54 @@
         }
 
         // ---------- 星系：波浪点阵（参考 samplexWave） ----------
+        // samplexWave：box 网格 + sin 波浪 + 渐变着色（参数取自需求面板，适配星系场景作为发光波动地面）
+        const WAVE_P = {
+            freq: 0.05, amp: 5, speed: 1,          // 频率 / 振幅 / 速度
+            size: 0.8, density: 0.8, opacity: 0.7, // 尺寸 / 密度 / 透明度
+            metalness: 0.5, roughness: 0.2,        // 材质
+            colBase: 0x2bc1ff, colTop: 0xff4b8c,   // 基础色（低）→ 顶部色（高）
+            rotateSpeed: 0.5, grid: 44             // 自动旋转速度 / 每边格数
+        };
         function buildWave() {
-            const G = 90, S = 260, pos = new Float32Array(G * G * 3);
-            let k = 0;
-            for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) { pos[k++] = (i / (G - 1) - 0.5) * S; pos[k++] = 0; pos[k++] = (j / (G - 1) - 0.5) * S; }
-            const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-            const mat = new THREE.ShaderMaterial({
-                transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-                uniforms: { time: { value: 0 }, colA: { value: new THREE.Color(0x7c4dff) }, colB: { value: new THREE.Color(0x18ffff) } },
-                vertexShader: `uniform float time; varying float vH;
-                    void main(){ vec3 p=position; float d=length(p.xz);
-                        float y=sin(d*0.10 - time*2.0)*2.2*exp(-d*0.010); p.y=y; vH=y;
-                        vec4 mv=modelViewMatrix*vec4(p,1.0);
-                        gl_PointSize=3.0*(120.0/max(-mv.z,1.0)); gl_Position=projectionMatrix*mv; }`,
-                fragmentShader: `uniform vec3 colA,colB; varying float vH;
-                    void main(){ vec2 c=gl_PointCoord-0.5; if(dot(c,c)>0.25) discard;
-                        vec3 col=mix(colA,colB,clamp(vH*0.3+0.5,0.0,1.0)); gl_FragColor=vec4(col,0.85); }`
+            const P = WAVE_P;
+            const N = P.grid;
+            const spacing = 6 / P.density;               // 密度越大间距越小
+            const half = (N - 1) * spacing / 2;
+            const boxSize = spacing * P.size;            // 尺寸
+            const geo = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
+            const mat = new THREE.MeshStandardMaterial({
+                metalness: P.metalness, roughness: P.roughness,
+                transparent: true, opacity: P.opacity,
+                emissive: 0xffffff, emissiveIntensity: 0.35   // 配合 bloom 发光
             });
-            const pts = new THREE.Points(geo, mat); pts.position.y = -3.5;
-            scene.add(pts); sceneSingletons.wave = pts;
+            const mesh = new THREE.InstancedMesh(geo, mat, N * N);
+            const cBase = new THREE.Color(P.colBase), cTop = new THREE.Color(P.colTop), c = new THREE.Color();
+            const dummy = new THREE.Object3D(), grid = [];
+            let idx = 0;
+            for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+                const x = i * spacing - half, z = j * spacing - half;
+                grid.push({ x, z, d: Math.hypot(x, z), idx });
+                dummy.position.set(x, 0, z); dummy.updateMatrix(); mesh.setMatrixAt(idx, dummy.matrix);
+                mesh.setColorAt(idx, cBase); idx++;
+            }
+            mesh.position.y = -7; mesh.instanceColor.needsUpdate = true;
+            mesh._waveGrid = grid; mesh._dummy = dummy; mesh._cBase = cBase; mesh._cTop = cTop; mesh._c = c;
+            scene.add(mesh); sceneSingletons.wave = mesh;
+        }
+        // 每帧推进波浪（box 上下起伏 + 高度→渐变色）
+        function updateWaveGrid(mesh, t, dt) {
+            const P = WAVE_P, g = mesh._waveGrid, d2 = mesh._dummy, cB = mesh._cBase, cT = mesh._cTop, c = mesh._c;
+            for (let n = 0; n < g.length; n++) {
+                const it = g[n];
+                const y = Math.sin(it.d * P.freq + t * P.speed) * P.amp;
+                d2.position.set(it.x, y, it.z); d2.rotation.set(0, y * 0.04, 0); d2.updateMatrix();
+                mesh.setMatrixAt(it.idx, d2.matrix);
+                c.copy(cB).lerp(cT, y / P.amp * 0.5 + 0.5);
+                mesh.setColorAt(it.idx, c);
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            mesh.rotation.y += dt * P.rotateSpeed * 0.15; // 自动旋转（适配场景，放缓）
         }
 
         // ---------- 星系：远景星空 ----------
@@ -4024,6 +4122,17 @@
             dirtGroundTex = TL.load('assets/scene_props/ground_dirt_color.jpg');
             dirtGroundTex.wrapS = dirtGroundTex.wrapT = THREE.RepeatWrapping;
             const GL = getGLTFLoader();
+            // eztree.dev 真实橡树（headless 用 ez-tree 库 + oak_medium 预设生成的 GLB），归一到 1 单位
+            GL.load('assets/scene_props/eztree_oak.glb', g => {
+                // 本游戏渲染器为线性管线，glTF 的 sRGB 贴图会偏暗 → 给枝叶补一点自发光提亮，保持葱郁
+                g.scene.traverse(o => {
+                    if (!o.isMesh || !o.material) return;
+                    const nm = o.material.name || '';
+                    if (nm === 'leaves') { o.material.emissive = new THREE.Color(0x1c4d12); o.material.emissiveIntensity = 0.28; }
+                    else if (nm === 'branches') { o.material.emissive = new THREE.Color(0x2a1a0e); o.material.emissiveIntensity = 0.12; }
+                });
+                const w = gNormalizeProp(g.scene, 1, true); w._sharedAssets = true; grassOakTemplates.push(w);
+            }, undefined, () => console.warn('[草地] eztree_oak.glb 加载失败，回退低模树'));
             GL.load(base + 'models/grass.glb', g => { const w = gNormalizeProp(g.scene, 1.3, true); w._sharedAssets = true; grassBladeTemplates.push(w); }, undefined, () => {});
             ['rock1', 'rock2', 'rock3'].forEach(r => GL.load(base + 'models/' + r + '.glb', g => { const w = gNormalizeProp(g.scene, 1.1, true); w._sharedAssets = true; rockTemplates.push(w); }, undefined, () => {}));
             ['flower_blue', 'flower_white', 'flower_yellow'].forEach(r => GL.load(base + 'models/' + r + '.glb', g => { const w = gNormalizeProp(g.scene, 0.9, true); w._sharedAssets = true; flowerTemplates.push(w); }, undefined, () => {}));
@@ -4045,25 +4154,33 @@
             gsap.to(obj.scale, { x: sx, y: sy, z: sz, duration: 0.7, ease: "power2.out" });
         }
         function makeGrassTree() {
+            // 优先 eztree 真实橡树（更大，复刻 eztree.dev 观感）；否则回退低模树
+            if (grassOakTemplates.length) {
+                const m = grassOakTemplates[Math.floor(Math.random() * grassOakTemplates.length)].clone(true); m._sharedAssets = true;
+                m.scale.setScalar(11 + Math.random() * 8); m.rotation.y = Math.random() * Math.PI * 2; return m;
+            }
             if (!sceneTreeTemplates.length) return null;
             const m = sceneTreeTemplates[Math.floor(Math.random() * sceneTreeTemplates.length)].clone(true); m._sharedAssets = true;
-            m.scale.setScalar(3.0 + Math.random() * 3.2); m.rotation.y = Math.random() * Math.PI * 2; return m;
+            m.scale.setScalar(4.5 + Math.random() * 4); m.rotation.y = Math.random() * Math.PI * 2; return m;
         }
         function makeGrassClump() {
             const m = grassBladeTemplates[Math.floor(Math.random() * grassBladeTemplates.length)].clone(true); m._sharedAssets = true;
             m.scale.setScalar(0.8 + Math.random() * 1.0); m.rotation.y = Math.random() * Math.PI * 2; return m;
         }
-        // 草地一整排：两侧稀疏树木 + 全宽散布草丛/花/石（eztree.dev 风格）
+        // 草地一整排：两侧大橡树（更密更近、减少留白）+ 全宽密集草丛/花/石（复刻 eztree.dev）
         function spawnGrassRow(z) {
-            if (Math.random() < 0.5) { const t = makeGrassTree(); if (t) { t.position.set((Math.random() < 0.5 ? -1 : 1) * (9 + Math.random() * 16), 0, z + (Math.random() - 0.5) * 5); addSceneDeco(t); } }
-            const n = 3 + Math.floor(Math.random() * 3);
+            // 两侧各以高概率放一棵大树，贴近赛道边缘填满画面
+            [-1, 1].forEach(side => {
+                if (Math.random() < 0.82) { const t = makeGrassTree(); if (t) { t.position.set(side * (5 + Math.random() * 11), 0, z + (Math.random() - 0.5) * 5); addSceneDeco(t); } }
+            });
+            const n = 6 + Math.floor(Math.random() * 4); // 更密的地被
             for (let i = 0; i < n; i++) {
                 const r = Math.random(); let o = null;
-                if (r < 0.6 && grassBladeTemplates.length) o = makeGrassClump();
-                else if (r < 0.8 && flowerTemplates.length) { o = flowerTemplates[Math.floor(Math.random() * flowerTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.7 + Math.random() * 0.6); }
-                else if (rockTemplates.length) { o = rockTemplates[Math.floor(Math.random() * rockTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.7 + Math.random() * 1.0); o.rotation.y = Math.random() * Math.PI * 2; }
+                if (r < 0.6 && grassBladeTemplates.length) { o = makeGrassClump(); o.scale.multiplyScalar(1.4); }
+                else if (r < 0.8 && flowerTemplates.length) { o = flowerTemplates[Math.floor(Math.random() * flowerTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.9 + Math.random() * 0.8); }
+                else if (rockTemplates.length) { o = rockTemplates[Math.floor(Math.random() * rockTemplates.length)].clone(true); o._sharedAssets = true; o.scale.setScalar(0.9 + Math.random() * 1.3); o.rotation.y = Math.random() * Math.PI * 2; }
                 if (!o) continue;
-                o.position.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 30), 0, z + (Math.random() - 0.5) * 6);
+                o.position.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 36), 0, z + (Math.random() - 0.5) * 6);
                 addSceneDeco(o);
             }
         }
@@ -4082,8 +4199,8 @@
             if (sceneBuildingTemplates.length) {
                 const tpl = sceneBuildingTemplates[Math.floor(Math.random() * sceneBuildingTemplates.length)];
                 const m = tpl.clone(true); m._sharedAssets = true;
-                const s = 2.6 + Math.random() * 2.6;
-                m.scale.set(s, s * (1.0 + Math.random() * 1.4), s); // 高度随机拉伸形成天际线
+                const s = 3.6 + Math.random() * 3.6;
+                m.scale.set(s, s * (1.0 + Math.random() * 1.6), s); // 高度随机拉伸形成天际线（放大减少留白）
                 m.rotation.y = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.4;
                 m.position.y = -2; // 底部坐落在水面上
                 return m;
@@ -4127,19 +4244,22 @@
         }
         function makeGalaxyProp() {
             const cols = [0xb388ff, 0x18ffff, 0xff80ab];
-            const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.5 + Math.random() * 0.8, 0),
+            const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.9 + Math.random() * 1.4, 0),
                 new THREE.MeshStandardMaterial({ color: cols[Math.floor(Math.random() * cols.length)], emissive: cols[Math.floor(Math.random() * cols.length)], emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.2 }));
-            m.position.y = 1.5 + Math.random() * 7; m._spin = true; m._float = true; return m;
+            m.position.y = 1.0 + Math.random() * 9; m._spin = true; m._float = true; return m;
         }
         function spawnSceneSideRow(z) {
             if (currentScene === 'grass') { spawnGrassRow(z); return; } // 草地：eztree 全宽散布
             const make = currentScene === 'sea' ? makeSeaProp : makeGalaxyProp;
-            const sides = Math.random() < 0.7 ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1];
-            sides.forEach(side => {
-                const obj = make(); if (!obj) return;
-                obj.position.x = side * (13 + Math.random() * 16);
-                obj.position.z = z + (Math.random() - 0.5) * 6;
-                addSceneDeco(obj);
+            // 两侧都放、每侧 1~2 个、更靠近赛道，填满画面减少留白
+            [-1, 1].forEach(side => {
+                const cnt = 1 + (Math.random() < 0.55 ? 1 : 0);
+                for (let k = 0; k < cnt; k++) {
+                    const obj = make(); if (!obj) continue;
+                    obj.position.x = side * (8 + Math.random() * 16);
+                    obj.position.z = z + (Math.random() - 0.5) * 7;
+                    addSceneDeco(obj);
+                }
             });
         }
 
@@ -4265,7 +4385,7 @@
             const t = now * 0.001, cx = camera.position.x, cz = camera.position.z, s = sceneSingletons;
             if (s.water) { s.water.position.x = cx; s.water.position.z = cz; s.water.material.uniforms.time.value = t; }
             if (s.galaxy) { s.galaxy.position.x = cx; s.galaxy.position.z = cz - 60; s.galaxy.rotation.y += dt * 0.04; }
-            if (s.wave) { s.wave.position.x = cx; s.wave.position.z = cz; s.wave.material.uniforms.time.value = t; }
+            if (s.wave) { s.wave.position.x = cx; s.wave.position.z = cz; updateWaveGrid(s.wave, t, dt); }
             if (s.stars) { s.stars.position.x = cx; s.stars.position.z = cz; }
             if (currentScene === 'grass') { if (!s.grass) buildGrassGround(); if (s.grass) { s.grass.position.x = cx; s.grass.position.z = cz; if (grassGroundTex) grassGroundTex.offset.set(cx / 22, -cz / 22); } } // 贴图随相机反向偏移=世界锁定滚动
             // GLB 道路（海上城市/星系）随玩家无限平铺
@@ -4276,9 +4396,9 @@
             }
             // 侧边道具随玩家前进无限补充
             const ahead = playerGroup.position.z - 95; let guard = 0;
-            while (_scenePropCursorZ > ahead && guard++ < 40) {
+            while (_scenePropCursorZ > ahead && guard++ < 60) {
                 spawnSceneSideRow(_scenePropCursorZ);
-                _scenePropCursorZ -= (9 + Math.random() * 7);
+                _scenePropCursorZ -= (5 + Math.random() * 5); // 行距收紧，装饰更密
             }
         }
 
@@ -4458,6 +4578,7 @@
             if (skyMesh) { skyMesh.position.copy(camera.position); skyMesh.material.uniforms.time.value = now * 0.001; }
 
             updateInfiniteGroundAndLanes();
+            updateCoinTrail();
             updateSceneEnvironment(dt, now);
             updateJumpParticles(dt);
             updateDustParticles(dt);
